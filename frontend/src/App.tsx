@@ -86,25 +86,20 @@ export default function App() {
       <div className={`shell ${collapsed ? "rail-collapsed" : ""}`}>
         <aside className={`rail ${collapsed ? "collapsed" : ""}`} aria-label="Main Navigation">
           <div className="brand">
-            <div
-              className="brand-main"
-              onClick={collapsed ? toggleSidebar : undefined}
-              style={collapsed ? { cursor: "pointer" } : undefined}
-              title={collapsed ? "Expand sidebar" : undefined}
-            >
-              <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden className="brand-logo">
-                <rect width="32" height="32" rx="8" fill="#18233e" />
-                <circle cx="11.5" cy="16" r="4.6" fill="#e8edf6" />
-                <circle cx="20.5" cy="16" r="4.6" fill="#e8edf6" />
-                <circle cx="16" cy="16" r="4.6" fill="#7083f0" />
-              </svg>
-              {!collapsed && (
+            {!collapsed && (
+              <div className="brand-main">
+                <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden className="brand-logo">
+                  <rect width="32" height="32" rx="8" fill="#18233e" />
+                  <circle cx="11.5" cy="16" r="4.6" fill="#e8edf6" />
+                  <circle cx="20.5" cy="16" r="4.6" fill="#e8edf6" />
+                  <circle cx="16" cy="16" r="4.6" fill="#7083f0" />
+                </svg>
                 <div className="brand-meta">
                   <span className="brand-name">buns</span>
                   <span className="brand-sub">security assessment</span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <button
               type="button"
               className="rail-toggle-btn"

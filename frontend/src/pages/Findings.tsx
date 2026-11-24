@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Bot, ChevronRight, Inbox, Loader2, Search, Sparkles, X } from "lucide-react";
+import { ChevronRight, Inbox, Loader2, Search, X } from "lucide-react";
 import { api, CATEGORIES, CATEGORY_LABEL, fid, pathOf, SEVERITIES, SEVERITY_LABEL, type FindingSummary } from "../api";
-import { Empty, ErrorLine, PageHead, ReviewTag, Sev, Skeleton, usePoll } from "../components/ui";
+import { Empty, ErrorLine, PageHead, Skeleton, usePoll } from "../components/ui";
 
 const STATUSES: [string, string][] = [
   ["pending", "Needs review"],
@@ -14,26 +14,21 @@ const STATUSES: [string, string][] = [
 function AiCell({ f }: { f: FindingSummary }) {
   if (f.ai_status === "pending" || f.ai_status === "running")
     return (
-      <span className="ai-status-pill analyzing">
-        <Loader2 size={13} className="spin" aria-hidden />
-        <span>Analysing</span>
+      <span className="suggest-wait">
+        <Loader2 size={13} className="spin" aria-hidden /> Analysing
       </span>
     );
-  if (f.ai_status === "failed")
-    return (
-      <span className="ai-status-pill failed" title="Analysis failed">
-        <Sparkles size={12} />
-        <span>Failed</span>
-      </span>
-    );
+  if (f.ai_status === "failed") return <span className="suggest-failed">Analysis failed</span>;
+  if (!f.ai_severity) return <span className="dim">–</span>;
   return (
-    <span className="ai-status-pill done">
-      <Bot size={13} className="ai-status-icon" aria-hidden />
-      <Sev s={f.ai_severity} size="sm" />
-      {f.ai_cvss_score !== null && <span className="mono cvss-score-tag">{f.ai_cvss_score.toFixed(1)}</span>}
+    <span className="suggest">
+      <span className={`suggest-sev sev-t-${f.ai_severity}`}>{SEVERITY_LABEL[f.ai_severity]}</span>
+      {f.ai_cvss_score !== null && <span className="suggest-score">{f.ai_cvss_score.toFixed(1)}</span>}
     </span>
   );
 }
+
+const STATUS_TEXT = { pending: "Needs review", confirmed: "Confirmed", rejected: "False positive" } as const;
 
 export default function Findings() {
   const [params, setParams] = useSearchParams();
@@ -170,9 +165,9 @@ export default function Findings() {
                   <td>{CATEGORY_LABEL[f.category]}</td>
                   <td><AiCell f={f} /></td>
                   <td>
-                    <ReviewTag s={f.status} />
+                    <span className={`status-text ${f.status}`}>{STATUS_TEXT[f.status]}</span>
                     {f.status === "confirmed" && f.final_severity && (
-                      <span className="cell-sub"><Sev s={f.final_severity} size="sm" /></span>
+                      <span className={`status-sub sev-t-${f.final_severity}`}>as {SEVERITY_LABEL[f.final_severity]}</span>
                     )}
                   </td>
                   <td className="row-go" aria-hidden><ChevronRight size={16} /></td>
