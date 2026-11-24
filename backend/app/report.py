@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from reportlab.graphics.shapes import Drawing, Rect, String
+from reportlab.graphics.shapes import Circle, Drawing, Line, PolyLine, Rect, String
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -53,7 +53,7 @@ SEV_LABEL = {s: s.capitalize() if s != "info" else "Informational" for s in SEVE
 
 _base = dict(fontName="Helvetica", textColor=INK, leading=13.5, fontSize=9.6, alignment=TA_LEFT)
 S = {
-    "body": ParagraphStyle("body", **_base, spaceAfter=6),
+    "body": ParagraphStyle("body", **{**_base, "alignment": TA_JUSTIFY}, spaceAfter=6),
     "small": ParagraphStyle("small", **{**_base, "fontSize": 8.2, "leading": 11, "textColor": MUTED}),
     "h1": ParagraphStyle("h1", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 17, "leading": 22, "spaceAfter": 10, "spaceBefore": 4}),
     "h2": ParagraphStyle("h2", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 12.5, "leading": 16, "spaceAfter": 6, "spaceBefore": 12}),
@@ -62,9 +62,12 @@ S = {
     "cell": ParagraphStyle("cell", **{**_base, "fontSize": 8.6, "leading": 11.2}),
     "cellb": ParagraphStyle("cellb", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 8.6, "leading": 11.2}),
     "mono": ParagraphStyle("mono", fontName="Courier", fontSize=7.4, leading=9.4, textColor=INK),
-    "bullet": ParagraphStyle("bullet", **{**_base, "leftIndent": 14, "bulletIndent": 2, "spaceAfter": 3}),
-    "cover_title": ParagraphStyle("ct", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 28, "leading": 33}),
-    "cover_sub": ParagraphStyle("cs", **{**_base, "fontSize": 13, "leading": 18, "textColor": MUTED}),
+    "bullet": ParagraphStyle("bullet", **{**_base, "alignment": TA_JUSTIFY, "leftIndent": 14, "bulletIndent": 2, "spaceAfter": 3}),
+    "refs": ParagraphStyle("refs", **{**_base, "spaceAfter": 6}),
+    "cover_title": ParagraphStyle("ct", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 28, "leading": 33, "alignment": TA_CENTER}),
+    "cover_sub": ParagraphStyle("cs", **{**_base, "fontSize": 13, "leading": 18, "textColor": MUTED, "alignment": TA_CENTER}),
+    "brand": ParagraphStyle("brand", **{**_base, "fontName": "Helvetica-Bold", "fontSize": 22, "leading": 26, "alignment": TA_CENTER}),
+    "tagline": ParagraphStyle("tagline", **{**_base, "fontSize": 10.5, "leading": 14, "textColor": MUTED, "alignment": TA_CENTER}),
 }
 
 _NON_LATIN = re.compile(r"[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]")
@@ -106,6 +109,23 @@ def _wrap_mono(text: str, width: int = 104, max_lines: int = 40) -> str:
     if len(out) > max_lines:
         out = out[:max_lines] + [f"[... {len(out) - max_lines} more lines in the platform]"]
     return "\n".join(out)
+
+
+def logo(size: float = 22 * mm) -> Drawing:
+    """The buns mark (a "b" in a scanner's corner bracket), drawn from the same 32x32 geometry as the web logo."""
+    k = size / 32.0
+    d = Drawing(size, size)
+
+    def y(v: float) -> float:  # SVG y grows downwards; PDF y grows upwards
+        return size - v * k
+
+    d.add(Rect(0, 0, size, size, rx=9 * k, ry=9 * k, fillColor=colors.HexColor("#4256e3"), strokeColor=None))
+    white = colors.white
+    d.add(Line(10.5 * k, y(6.5), 10.5 * k, y(25.5), strokeColor=white, strokeWidth=3.8 * k, strokeLineCap=1))
+    d.add(Circle(17 * k, y(19), 5.6 * k, fillColor=None, strokeColor=white, strokeWidth=3.8 * k))
+    d.add(PolyLine([21 * k, y(6.5), 25.5 * k, y(6.5), 25.5 * k, y(11)], strokeColor=colors.HexColor("#a9b4ff"),
+                   strokeWidth=2.4 * k, strokeLineCap=1, strokeLineJoin=1))
+    return d
 
 
 def _inline(text: str) -> str:
@@ -219,8 +239,12 @@ def build_report(db: Session, target: Target, prepared_by: str, path: Path) -> P
     story: list = []
 
     # -- cover --
-    story += [Spacer(1, 55 * mm), P("Web Application Security Assessment", "cover_title"), Spacer(1, 4 * mm),
-              P(target.name, "cover_sub"), Spacer(1, 18 * mm)]
+    mark = logo()
+    mark.hAlign = "CENTER"
+    story += [Spacer(1, 30 * mm), mark, Spacer(1, 4 * mm), P("buns", "brand"),
+              P("Find the flaws before someone else does.", "tagline"), Spacer(1, 22 * mm),
+              P("Web Application Security Assessment", "cover_title"), Spacer(1, 4 * mm),
+              P(target.name, "cover_sub"), Spacer(1, 16 * mm)]
     period = ""
     if done_scans:
         first = min(s.started_at or s.created_at for s in done_scans)
@@ -425,6 +449,10 @@ def _finding_block(f: Finding) -> list:
         if rem.get("verification"):
             out += [Spacer(1, 2 * mm), Praw(f"<b>Verify.</b> {_inline(rem['verification'])}")]
         if rem.get("references"):
-            out.append(Praw("<b>References.</b> " + "; ".join(escape(_latin(r)) for r in rem["references"])))
+            links = []
+            for r in rem["references"]:
+                text = escape(_latin(r))
+                links.append(f'<link href="{text}" color="#3343c4">{text}</link>' if r.startswith(("http://", "https://")) else text)
+            out.append(Praw("<b>References.</b><br/>" + "<br/>".join(links), "refs"))
     out.append(Spacer(1, 6 * mm))
     return out
