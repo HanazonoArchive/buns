@@ -108,6 +108,12 @@ def _wrap_mono(text: str, width: int = 104, max_lines: int = 40) -> str:
     return "\n".join(out)
 
 
+def _inline(text: str) -> str:
+    """Escape for ReportLab, turning `backticked` fragments into monospace."""
+    parts = _latin(text or "").split("`")
+    return "".join(f'<font face="Courier">{escape(p)}</font>' if i % 2 else escape(p) for i, p in enumerate(parts))
+
+
 def code_box(text: str, max_lines: int = 40) -> Table:
     pre = Preformatted(_wrap_mono(text, max_lines=max_lines), S["mono"])
     t = Table([[pre]], colWidths=[170 * mm])
@@ -400,14 +406,25 @@ def _finding_block(f: Finding) -> list:
     if rem.get("steps"):
         out.append(P("Remediation", "h3"))
         if rem.get("root_cause"):
-            out.append(Praw(f"<b>Root cause.</b> {escape(_latin(rem['root_cause']))}"))
+            out.append(Praw(f"<b>Root cause.</b> {_inline(rem['root_cause'])}"))
+        paras = []
         for n, step in enumerate(rem["steps"], 1):
-            out.append(Paragraph(escape(_latin(step)), S["bullet"], bulletText=f"{n}."))
+            if isinstance(step, dict):
+                title, detail = step.get("title", ""), step.get("detail", "")
+            else:
+                title, detail = "", str(step)
+            text = (f"<b>{_inline(title)}.</b> " if title else "") + _inline(detail)
+            paras.append(Paragraph(text, S["bullet"], bulletText=f"{n}."))
+        # Keep the label with the first step so it never sits alone at a page foot.
+        out.append(KeepTogether([P("FIX STEPS", "label"), paras[0]]))
+        out += paras[1:]
         if rem.get("code_example") and not rem["code_example"].startswith("// No generic"):
             out += [Spacer(1, 1 * mm), KeepTogether([
                 P(f"EXAMPLE ({rem.get('code_language', 'code').upper()})", "label"),
                 code_box(rem["code_example"], 45)])]
         if rem.get("verification"):
-            out.append(Praw(f"<b>Verify.</b> {escape(_latin(rem['verification']))}"))
+            out += [Spacer(1, 2 * mm), Praw(f"<b>Verify.</b> {_inline(rem['verification'])}")]
+        if rem.get("references"):
+            out.append(Praw("<b>References.</b> " + "; ".join(escape(_latin(r)) for r in rem["references"])))
     out.append(Spacer(1, 6 * mm))
     return out

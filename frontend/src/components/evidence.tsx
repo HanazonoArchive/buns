@@ -118,8 +118,19 @@ export function CvssBreakdown({ vector, score, severity }: { vector: string; sco
   );
 }
 
-export function CodeBlock({ code, label }: { code: string; label?: string }) {
+/** Text with `backticked` fragments shown as inline code. */
+export function Inline({ text }: { text: string }) {
+  const parts = text.split("`");
+  if (parts.length < 3) return <>{text}</>;
+  return <>{parts.map((p, i) => (i % 2 && i < parts.length - 1 ? <code key={i} className="ic">{p}</code> : <span key={i}>{p}</span>))}</>;
+}
+
+const FOLD_AT = 18;
+
+export function CodeBlock({ code, label, fold }: { code: string; label?: string; fold?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const lines = code.split("\n").length;
+  const [open, setOpen] = useState(!fold || lines <= FOLD_AT + 4);
   return (
     <div className="codeblock">
       <div className="codeblock-bar">
@@ -137,7 +148,12 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre>{code}</pre>
+      <pre className={open ? "" : "folded"}>{code}</pre>
+      {!open && (
+        <button className="codeblock-more" onClick={() => setOpen(true)}>
+          Show all {lines} lines
+        </button>
+      )}
     </div>
   );
 }

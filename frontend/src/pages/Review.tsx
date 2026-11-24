@@ -28,7 +28,7 @@ import {
   type Notice,
   type Severity,
 } from "../api";
-import { CodeBlock, CvssBreakdown, HttpMessage } from "../components/evidence";
+import { CodeBlock, CvssBreakdown, HttpMessage, Inline } from "../components/evidence";
 import { DeliveryChips } from "../components/Bell";
 import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
@@ -223,6 +223,22 @@ function Analysis({ f, onRetry }: { f: FindingDetail; onRetry?: () => void }) {
   );
 }
 
+/** "https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html" -> "OWASP: Query Parameterization Cheat Sheet". */
+function refLabel(url: string) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const cwe = /cwe\.mitre\.org\/data\/definitions\/(\d+)/.exec(url);
+    if (cwe) return `CWE-${cwe[1]}`;
+    const site = host.includes("owasp.org") ? "OWASP" : host.split(".").slice(-2, -1)[0].replace(/^./, (c) => c.toUpperCase());
+    const last = u.pathname.split("/").filter(Boolean).pop() ?? "";
+    const page = decodeURIComponent(last).replace(/\.(html?|md)$/, "").replace(/[_-]+/g, " ").trim();
+    return page ? `${site}: ${page}` : site;
+  } catch {
+    return url;
+  }
+}
+
 function Remediation({ f, onRetry }: { f: FindingDetail; onRetry?: () => void }) {
   if (f.status !== "confirmed") return null;
   const r = f.remediation;
@@ -247,16 +263,64 @@ function Remediation({ f, onRetry }: { f: FindingDetail; onRetry?: () => void })
         )}
         {f.remediation_status === "done" && r && (
           <>
-            {r.root_cause && <p className="lead">{r.root_cause}</p>}
-            <ol className="steps">{r.steps?.map((s, i) => <li key={i}>{s}</li>)}</ol>
-            {r.code_example && !r.code_example.startsWith("// No generic") && <CodeBlock code={r.code_example} label={r.code_language} />}
-            {r.verification && (
-              <p className="verify">
-                <Check size={15} aria-hidden /> <span><b>Check the fix.</b> {r.verification}</span>
-              </p>
+            {r.root_cause && (
+              <div className="rem-block rem-first">
+                <h3>Root cause</h3>
+                <p><Inline text={r.root_cause} /></p>
+              </div>
             )}
-            {r.references && r.references.length > 0 && <p className="dim small">References: {r.references.join("; ")}</p>}
-            {onRetry && <button className="link small inline" onClick={onRetry}><RotateCcw size={13} /> Regenerate</button>}
+            {r.steps && r.steps.length > 0 && (
+              <div className="rem-block">
+                <h3>Fix steps</h3>
+                <ol className="fix-steps">
+                  {r.steps.map((raw, i) => {
+                    const st = typeof raw === "string" ? { title: "", detail: raw } : raw;
+                    return (
+                      <li key={i}>
+                        <span className="fix-n" aria-hidden>{i + 1}</span>
+                        <div>
+                          {st.title && <b className="fix-title"><Inline text={st.title} /></b>}
+                          {st.detail && <p><Inline text={st.detail} /></p>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+            {r.code_example && !r.code_example.startsWith("// No generic") && (
+              <div className="rem-block">
+                <h3>Secure code</h3>
+                <CodeBlock code={r.code_example} label={r.code_language} fold />
+              </div>
+            )}
+            {r.verification && (
+              <div className="rem-block">
+                <p className="verify">
+                  <Check size={15} aria-hidden />
+                  <span><b>Verify the fix.</b> <Inline text={r.verification} /></span>
+                </p>
+              </div>
+            )}
+            {r.references && r.references.length > 0 && (
+              <div className="rem-block">
+                <h3>References</h3>
+                <ul className="refs">
+                  {r.references.map((ref) => (
+                    <li key={ref}>
+                      {/^https?:\/\//.test(ref) ? (
+                        <a href={ref} target="_blank" rel="noreferrer" className="inline">
+                          {refLabel(ref)} <ExternalLink size={12} aria-hidden />
+                        </a>
+                      ) : (
+                        ref
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {onRetry && <button className="link small inline rem-regen" onClick={onRetry}><RotateCcw size={13} /> Regenerate</button>}
           </>
         )}
       </div>

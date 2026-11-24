@@ -250,7 +250,15 @@ def test_validate_analysis_rejects_bad_vector():
 
 def test_validate_remediation_accepts_string_steps():
     rem = validate_remediation({"steps": "- one\n- two", "references": "CWE-89"})
-    assert rem["steps"] == ["one", "two"] and rem["references"] == ["CWE-89"]
+    assert rem["steps"] == [{"title": "", "detail": "one"}, {"title": "", "detail": "two"}]
+    assert rem["references"] == ["CWE-89"]
+
+
+def test_validate_remediation_keeps_step_titles():
+    rem = validate_remediation({"steps": [{"title": "Use parameterised queries", "detail": "Replace `sequelize.query`."},
+                                          {"title": "", "detail": ""}, "Add a regression test."]})
+    assert rem["steps"] == [{"title": "Use parameterised queries", "detail": "Replace `sequelize.query`."},
+                            {"title": "", "detail": "Add a regression test."}]
 
 
 def test_deepseek_client_request_and_fenced_json():

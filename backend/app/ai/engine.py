@@ -123,11 +123,20 @@ def validate_analysis(data: dict) -> dict[str, Any]:
     }
 
 
+def _step(raw: Any) -> dict[str, str]:
+    """Normalise a step to {"title", "detail"}; plain strings (older replies, built-in rules) become detail-only."""
+    if isinstance(raw, dict):
+        title = str(raw.get("title") or "").strip()[:120]
+        detail = str(raw.get("detail") or raw.get("description") or raw.get("text") or "").strip()[:900]
+        return {"title": title, "detail": detail}
+    return {"title": "", "detail": str(raw).strip()[:900]}
+
+
 def validate_remediation(data: dict) -> dict[str, Any]:
     steps = data.get("steps") or []
     if isinstance(steps, str):
         steps = [line.strip("-* ").strip() for line in steps.splitlines() if line.strip()]
-    steps = [str(s).strip() for s in steps if str(s).strip()][:12]
+    steps = [st for st in (_step(x) for x in steps) if st["title"] or st["detail"]][:8]
     if not steps:
         raise AIError("Remediation has no steps.")
     refs = data.get("references") or []
@@ -139,7 +148,7 @@ def validate_remediation(data: dict) -> dict[str, Any]:
         "code_language": _text(data, "code_language", 30) or "javascript",
         "code_example": _text(data, "code_example", 6000),
         "verification": _text(data, "verification", 600),
-        "references": [str(r)[:200] for r in refs][:8],
+        "references": [str(r).strip()[:200] for r in refs if str(r).strip()][:6],
     }
 
 

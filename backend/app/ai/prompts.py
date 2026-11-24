@@ -27,16 +27,21 @@ guidance for a developer. The affected application is a Node.js / Express web ap
 finding has already been confirmed by a human assessor.
 
 Produce concrete, correct guidance:
-- A short root-cause statement.
-- Numbered, specific fix steps (not generic advice).
-- A minimal, correct code or configuration example in the relevant language. Prefer \
-parameterised queries, output encoding, access-control checks and safe headers as \
-appropriate. The example must be safe to copy.
-- One sentence on how to verify the fix.
+- root_cause: one or two sentences on why the flaw exists.
+- steps: 3 to 6 fix steps, most important first. Each step is an object with a short \
+imperative "title" (at most 8 words, e.g. "Use parameterised queries") and a "detail" of \
+one or two sentences saying exactly what to change. Put code identifiers, file names \
+and payloads in `backticks`. No generic advice.
+- code_example: a minimal, correct example in the relevant language showing the fixed \
+code only (about 40 lines at most, no unrelated boilerplate). Prefer parameterised \
+queries, output encoding, access-control checks and safe headers as appropriate. It \
+must be safe to copy.
+- verification: one sentence on how to verify the fix.
+- references: up to 4 URLs, OWASP or CWE pages preferred.
 
 Return a single JSON object, no markdown, with exactly these keys:
-{"root_cause": str, "steps": [str, ...], "code_language": str, "code_example": str, \
-"verification": str, "references": [str, ...]}"""
+{"root_cause": str, "steps": [{"title": str, "detail": str}, ...], "code_language": str, \
+"code_example": str, "verification": str, "references": [str, ...]}"""
 
 
 def analysis_user(payload: dict) -> str:

@@ -88,9 +88,15 @@ export interface FindingSummary {
   not_in_latest_scan: number | null;
 }
 
+export interface FixStep {
+  title: string;
+  detail: string;
+}
+
 export interface Remediation {
   root_cause?: string;
-  steps?: string[];
+  /** Older remediations stored plain strings. */
+  steps?: (FixStep | string)[];
   code_language?: string;
   code_example?: string;
   verification?: string;
