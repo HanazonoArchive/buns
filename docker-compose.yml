@@ -36,6 +36,15 @@ services:
       # Inside the Compose network Juice Shop is reached by its service name.
       BUNS_ALLOWED_HOSTS: juice-shop,localhost,127.0.0.1
       BUNS_SEED_TARGET: http://juice-shop:3000
+      BUNS_SEED_OWNER_NAME: ${BUNS_SEED_OWNER_NAME:-}
+      BUNS_SEED_OWNER_EMAIL: ${BUNS_SEED_OWNER_EMAIL:-}
+      BUNS_PUBLIC_URL: ${BUNS_PUBLIC_URL:-http://localhost:8000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - buns-data:/data
     ports:

@@ -60,6 +60,7 @@ Juice Shop is then at `http://localhost:3000` (the URL in the proposal) and buns
 - Versions are pinned in `portable/versions.env`. Downloads are cached in `portable/cache`, so re-running setup is quick.
 - Intel Macs: Juice Shop publishes no prebuilt package for them, so setup skips it; run Juice Shop another way on port 3000.
 - If Windows shows a firewall prompt for Node.js, you can cancel it; everything is used from this computer only.
+- Keep the project folder path short on Windows (under about 45 characters, e.g. `C:\buns`): Juice Shop contains very deep paths and Windows limits paths to 260 characters.
 
 ### Without a DeepSeek key
 
@@ -72,8 +73,27 @@ If `DEEPSEEK_API_KEY` is empty, buns uses a built-in rules engine that maps each
 3. **Scan view.** Watch the phases and the activity log. Every request the probes send is listed with its status code.
 4. **Findings.** When the scan finishes, findings are analysed in the background. Open the first one.
 5. **Review.** Left: the request and response, with the payload and matched evidence highlighted. Right: the explanation, false-positive judgement and CVSS breakdown. *Sent for analysis* shows exactly what left the platform, after redaction. Enter your name, keep or change the severity, and confirm or reject. Changing the severity or rejecting requires a note.
-6. **Remediation** is generated as soon as a finding is confirmed and appears under the analysis.
-7. **Reports.** Generate the PDF. It contains confirmed findings only; rejected ones are listed in an appendix with the reason.
+6. **Remediation** is generated as soon as a finding is confirmed and appears under the analysis. Keyboard: `C` confirm, `X` reject, `J`/`K` next/previous.
+7. **Alerts.** While the scan ran, the bell lit up for each critical finding. Open it to see what was sent and to which channels; add a Discord or email channel under **Settings** and press **Send test**.
+8. **Reports.** Generate the PDF. It contains confirmed findings only; rejected ones are listed in an appendix with the reason.
+
+## Alerts: telling the owner when something breaks
+
+A finding sitting in a dashboard helps no one until the person responsible knows about it. buns raises an alert at each of these moments:
+
+| Event | When |
+| --- | --- |
+| Serious finding detected | Analysis rates a new finding critical or high (once per finding) |
+| Scan analysed | Every finding of a scan has been analysed: one summary with the breakdown |
+| Scan failed | A scan stopped before finishing |
+| Finding confirmed | An assessor verified a vulnerability |
+| Report generated | A PDF report is ready |
+
+Every alert appears in the bell at the top right, as a toast, and as a desktop notification if you allow it in the browser. It is also listed on the **Alerts** page with the delivery status per channel.
+
+To reach people outside the app, add channels under **Settings**: Discord, email, Telegram, Slack, or a generic JSON webhook (n8n, Zapier, your own service). Each channel picks its events, a minimum severity and optionally one target, and has a **Send test** button. Email needs the `SMTP_*` settings in `.env`; an email channel can also copy the **system owner** recorded on each target, so the person who owns the application hears about their own system.
+
+Alerts contain only the title, endpoint, severity and a link back to buns. Request and response evidence, payloads and credentials never leave the platform, and tool text goes through the same sanitiser as the AI calls. A failed delivery (wrong webhook URL, SMTP down) is recorded with its error and never interrupts a scan. Code: `backend/app/notifier.py`.
 
 ## How the proposal maps to the code
 
@@ -84,6 +104,7 @@ If `DEEPSEEK_API_KEY` is empty, buns uses a built-in rules engine that maps each
 | 3. AI remediation generator | `ai/engine.py` (`remediate_finding`), triggered on confirmation |
 | 4. Verification interface, evidence side by side | `frontend/src/pages/Review.tsx`, `POST /api/findings/{id}/review` |
 | 5. PDF report | `backend/app/report.py` |
+| Alerts to the system owner | `backend/app/notifier.py`, `frontend/src/components/Bell.tsx`, `frontend/src/pages/Settings.tsx` |
 | Scope register and enforcement | `backend/app/scope.py`, `Target` in `models.py` |
 | AI data protection (sanitisation) | `backend/app/sanitize.py` |
 | OWASP Top 10 / WSTG mapping | `backend/app/taxonomy.py` |
@@ -136,6 +157,8 @@ ZAP's active scan runs with a policy containing only the scan rules for the sele
 | `BUNS_SEED_TARGET` | empty | Registers Juice Shop at this URL on first start. |
 | `BUNS_DATABASE_URL` | `sqlite:///./data/buns.db` | SQLAlchemy URL. |
 | `BUNS_AI_CONCURRENCY` | `3` | Parallel AI calls. |
+| `BUNS_PUBLIC_URL` | `http://localhost:8000` | Base of the links inside alerts. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | empty, `587`, `starttls` | Email alerts. `SMTP_SECURITY` is `starttls`, `ssl` or `none`. |
 
 ## Development
 
@@ -180,11 +203,13 @@ backend/
     cvss.py          CVSS v3.1 base score
     taxonomy.py      CWE to category, OWASP Top 10 and WSTG
     report.py        PDF report
+    notifier.py      alerts: in-app, email, Discord, Slack, Telegram, webhook
     ai/              DeepSeek client, prompts, the two AI functions, offline rules
     tools/           ZAP client, cURL wrapper, probes, alert normalisation
   tests/
 frontend/
-  src/pages/         Overview, Findings, Review, Targets, TargetDetail, ScanView, Reports
+  src/pages/         Overview, Findings, Review, Targets, TargetDetail, ScanView, Reports, Notifications, Settings
+  src/components/    bell, toasts, modal, evidence viewer, shared UI
 docker-compose.yml   juice-shop, zap, buns
 portable/            setup, start and stop scripts for running without Docker
 ```
