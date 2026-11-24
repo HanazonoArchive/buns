@@ -28,28 +28,34 @@ export default function Login({ onSignedIn }: { onSignedIn: (me: Me) => void }) 
     <div className="login">
       <section className="login-side" aria-hidden>
         <div className="login-brand">
-          <Logo size={34} />
-          <span>buns</span>
+          <Logo size={38} />
+          <div>
+            <span className="login-name">buns</span>
+            <span className="login-tagline">Find the flaws before someone else does.</span>
+          </div>
         </div>
         <div className="login-pitch">
-          <p className="login-lead">Scan, triage and report on the web applications you are authorised to test.</p>
+          <p className="login-lead">Security testing for web applications, from first scan to final report.</p>
           <dl className="login-facts">
-            <div><dt>Scanners</dt><dd>OWASP ZAP and scripted cURL probes</dd></div>
-            <div><dt>Triage</dt><dd>AI-suggested severity, confirmed by a person</dd></div>
-            <div><dt>Output</dt><dd>PDF report of confirmed findings</dd></div>
+            <div><dt>Scan</dt><dd>Automated checks across your applications</dd></div>
+            <div><dt>Review</dt><dd>Every finding is verified by a person</dd></div>
+            <div><dt>Report</dt><dd>Clear results, ready to share</dd></div>
           </dl>
         </div>
-        <p className="login-foot">Accounts are created by the superadmin. Ask them for access.</p>
+        <p className="login-foot">Need an account? Ask your administrator.</p>
       </section>
 
       <main className="login-main">
         <form className="login-form" onSubmit={submit} noValidate>
           <div className="login-brand login-brand-compact">
-            <Logo size={30} />
-            <span>buns</span>
+            <Logo size={34} />
+            <div>
+              <span className="login-name">buns</span>
+              <span className="login-tagline">Find the flaws before someone else does.</span>
+            </div>
           </div>
           <h1>Sign in</h1>
-          <p className="dim">Use the email and password the superadmin gave you.</p>
+          <p className="dim">Use the email and password you were given.</p>
 
           <label className="field">
             <span className="field-label">Email</span>
