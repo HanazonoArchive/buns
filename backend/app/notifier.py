@@ -104,19 +104,34 @@ def finding_detected(f: Finding) -> Message:
 
 
 def scan_analysed(scan: Scan, findings: list[Finding]) -> Message:
+    """Summary of a finished scan. Findings first reported by this scan are
+    "new"; the rest were already known and keep their earlier decisions."""
+    new = [f for f in findings if f.scan_id == scan.id]
+    known = len(findings) - len(new)
     counts = {s: 0 for s in SEVERITIES}
-    for f in findings:
+    for f in new:
         counts[f.effective_severity] = counts.get(f.effective_severity, 0) + 1
     worst = next((s for s in SEVERITIES if counts[s]), "")
     parts = [f"{counts[s]} {SEV_LABEL[s].lower()}" for s in SEVERITIES if counts[s]]
-    summary = ", ".join(parts) if parts else "no findings"
+    summary = ", ".join(parts) if parts else "none"
+    title = f"Scan {scan.id} on {scan.target.name}: {len(new)} new finding(s)"
+    if known:
+        title += f", {known} seen before"
+    body = (f"Analysis finished. Suggested ratings of the new findings: {summary}. "
+            "Nothing is confirmed until an assessor reviews it.") if new else (
+            "No new findings. Everything this scan reported was already known; earlier decisions are kept.")
+    facts = [("Target", scan.target.name), ("New", str(len(new)))]
+    if known:
+        facts.append(("Seen before", str(known)))
+    if new:
+        facts.append(("Breakdown", summary))
     return Message(
         event="scan.analysed",
         severity=worst,
-        title=f"Scan {scan.id} on {scan.target.name}: {len(findings)} finding(s) to review",
-        body=f"Analysis finished. Suggested ratings: {summary}. Nothing is confirmed until an assessor reviews it.",
-        link=_link(f"/findings?scan={scan.id}&status=pending"),
-        facts=[("Target", scan.target.name), ("Findings", str(len(findings))), ("Breakdown", summary)],
+        title=title,
+        body=body,
+        link=_link(f"/findings?scan={scan.id}&status=pending" if new else f"/findings?scan={scan.id}&status="),
+        facts=facts,
         target_id=scan.target_id, scan_id=scan.id, owner_email=scan.target.owner_email,
     )
 
@@ -468,17 +483,25 @@ def on_analysis_done(finding_id: int) -> None:
         )
         if pending is None and scan.status == "completed" and not scan.analysis_notified:
             scan.analysis_notified = True
-            outbox.append(scan_analysed(scan, list(db.scalars(select(Finding).where(Finding.scan_id == scan.id)))))
+            outbox.append(scan_analysed(scan, _scan_findings(db, scan.id)))
     for msg in outbox:
         safe_emit(msg)
 
 
 def on_scan_without_findings(scan_id: int) -> None:
+    """Summary for a scan with nothing new to analyse."""
     with session_scope() as db:
         scan = db.get(Scan, scan_id)
         scan.analysis_notified = True
-        msg = scan_analysed(scan, [])
+        msg = scan_analysed(scan, _scan_findings(db, scan_id))
     emit(msg)
+
+
+def _scan_findings(db, scan_id: int) -> list[Finding]:
+    from .models import FindingScan
+
+    return list(db.scalars(select(Finding).join(FindingScan, FindingScan.finding_id == Finding.id)
+                           .where(FindingScan.scan_id == scan_id)))
 
 
 def on_scan_failed(scan_id: int) -> None:

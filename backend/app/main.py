@@ -17,7 +17,7 @@ from . import notifier, scanner, scope
 from .ai import engine
 from .config import settings
 from .db import get_db, init_db
-from .models import CATEGORIES, SEVERITIES, Channel, Endpoint, Finding, Notification, Report, Scan, Target
+from .models import CATEGORIES, SEVERITIES, Channel, Endpoint, Finding, FindingScan, Notification, Report, Scan, Target
 from .schemas import (
     ChannelIn,
     ChannelOut,
@@ -52,6 +52,7 @@ async def lifespan(_app: FastAPI):
     init_db()
     seed_default_target()
     scanner.recover_interrupted()
+    scanner.merge_duplicate_findings()
     yield
 
 
@@ -186,7 +187,8 @@ def scope_check(target_id: int, body: ScopeCheckIn, db: Session = Db):
 def _scan_out(db: Session, s: Scan, cls=ScanOut):
     out = cls.model_validate(s)
     out.target_name = s.target.name
-    out.finding_count = db.scalar(select(func.count(Finding.id)).where(Finding.scan_id == s.id)) or 0
+    out.finding_count = db.scalar(select(func.count()).select_from(FindingScan).where(FindingScan.scan_id == s.id)) or 0
+    out.new_finding_count = db.scalar(select(func.count(Finding.id)).where(Finding.scan_id == s.id)) or 0
     out.endpoint_count = db.scalar(select(func.count(Endpoint.id)).where(Endpoint.scan_id == s.id)) or 0
     return out
 
@@ -247,7 +249,7 @@ def list_findings(
     if target_id is not None:
         q = q.where(Finding.target_id == target_id)
     if scan_id is not None:
-        q = q.where(Finding.scan_id == scan_id)
+        q = q.join(FindingScan, FindingScan.finding_id == Finding.id).where(FindingScan.scan_id == scan_id)
     if status:
         q = q.where(Finding.status == status)
     if category:
@@ -256,7 +258,31 @@ def list_findings(
     if severity:
         rows = [f for f in rows if f.effective_severity == severity]
     rows.sort(key=lambda f: (_SEV_ORDER.get(f.effective_severity, 9), f.status != "pending", -f.id))
-    return rows
+    latest = _latest_scans(db, {f.target_id for f in rows})
+    out = []
+    for f in rows:
+        item = FindingSummary.model_validate(f)
+        item.not_in_latest_scan = _missing_from_latest(f, latest.get(f.target_id))
+        out.append(item)
+    return out
+
+
+def _latest_scans(db: Session, target_ids: set[int]) -> dict[int, Scan]:
+    """Most recent completed scan per target."""
+    latest: dict[int, Scan] = {}
+    if not target_ids:
+        return latest
+    for s in db.scalars(select(Scan).where(Scan.target_id.in_(target_ids), Scan.status == "completed").order_by(Scan.id)):
+        latest[s.target_id] = s
+    return latest
+
+
+def _missing_from_latest(f: Finding, latest: Scan | None) -> int | None:
+    """Id of the latest scan if it covered this finding's category but did not
+    report it again (it may have been fixed), else None."""
+    if latest is None or (f.last_seen_scan_id or f.scan_id) >= latest.id:
+        return None
+    return latest.id if f.category in (latest.categories or []) else None
 
 
 def _curl_repro(f: Finding) -> str:
@@ -283,15 +309,18 @@ def _curl_repro(f: Finding) -> str:
     return " ".join(parts)
 
 
-def _finding_detail(f: Finding) -> FindingDetail:
+def _finding_detail(f: Finding, db: Session | None = None) -> FindingDetail:
     out = FindingDetail.model_validate(f)
     out.curl_command = _curl_repro(f)
+    if db is not None:
+        out.seen_in_scans = sorted(db.scalars(select(FindingScan.scan_id).where(FindingScan.finding_id == f.id)))
+        out.not_in_latest_scan = _missing_from_latest(f, _latest_scans(db, {f.target_id}).get(f.target_id))
     return out
 
 
 @app.get("/api/findings/{finding_id}", response_model=FindingDetail)
 def get_finding(finding_id: int, db: Session = Db):
-    return _finding_detail(_get(db, Finding, finding_id, "Finding"))
+    return _finding_detail(_get(db, Finding, finding_id, "Finding"), db)
 
 
 @app.post("/api/findings/{finding_id}/review", response_model=FindingDetail)

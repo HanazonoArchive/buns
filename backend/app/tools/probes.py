@@ -164,13 +164,16 @@ def probe_error_disclosure(ctx: ProbeContext) -> list[FindingDraft]:
     stack = re.search(r"(?m)^\s*at .+\(.+\.js:\d+:\d+\)", ex.body) or re.search(r"at .{1,120}\.js:\d+:\d+", ex.body)
     if ex.status >= 500 or stack:
         if stack:
-            return [_draft(
+            d = _draft(
                 ex, rule="stack-trace", cwe=209, severity="low",
                 title="Stack trace returned for unknown API route",
                 description="Requesting a route that does not exist returns a server-side stack trace "
                             "with internal file paths, exposing implementation details.",
                 evidence=stack.group(0).strip()[:300],
-            )]
+            )
+            # The route is random on every scan; identify the finding by the pattern.
+            d.group_path = "/api/<unknown route>"
+            return [d]
     return []
 
 

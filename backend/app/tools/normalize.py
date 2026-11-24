@@ -79,6 +79,7 @@ def normalize_zap_alerts(alerts: list[dict]) -> list[FindingDraft]:
             occurrences=len(group),
             affected_urls=sorted({x.get("url", "") for x in group if x.get("url")})[:200],
             message_id=str(a.get("messageId") or ""),
+            group_path=_group_key(a)[1],
         ))
     return drafts
 

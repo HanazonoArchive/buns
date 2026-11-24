@@ -110,6 +110,13 @@ class Finding(Base):
     occurrences: Mapped[int] = mapped_column(Integer, default=1)
     affected_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
 
+    # Identity across scans: the same rule on the same endpoint and parameter
+    # of the same target is the same finding. scan_id is the first scan that
+    # reported it; finding_scans records every scan that has seen it since.
+    fingerprint: Mapped[str] = mapped_column(String(400), default="", index=True)
+    times_seen: Mapped[int] = mapped_column(Integer, default=1)
+    last_seen_scan_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # AI function 1: interpretation and risk scoring
     ai_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|running|done|failed
     ai_model: Mapped[str] = mapped_column(String(60), default="")
@@ -141,6 +148,10 @@ class Finding(Base):
 
     scan: Mapped[Scan] = relationship(back_populates="findings")
     target: Mapped[Target] = relationship()
+
+    @property
+    def target_name(self) -> str:
+        return self.target.name if self.target else ""
 
     @property
     def effective_severity(self) -> str:
@@ -224,3 +235,12 @@ class Delivery(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     notification: Mapped[Notification] = relationship(back_populates="deliveries")
+
+
+class FindingScan(Base):
+    """Which scans reported a finding (a finding can be seen by many scans)."""
+
+    __tablename__ = "finding_scans"
+
+    finding_id: Mapped[int] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"), primary_key=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), primary_key=True, index=True)

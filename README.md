@@ -132,6 +132,8 @@ The password-policy probe creates one account with a random `@example.test` addr
 
 Juice Shop is an Angular single-page app, so ZAP's spider sees the HTML shell but not the JSON API. Before the active scan, buns sends a few read-only API requests (product search, a failed login, a product lookup) through ZAP so those endpoints and their parameters are attacked too (`ZAP_SEEDS` in `scanner.py`). ZAP alerts are grouped: a passive issue seen on many URLs, such as a missing header, becomes one finding listing every affected URL; an active issue becomes one finding per endpoint and parameter. When ZAP and a cURL probe report the same flaw on the same endpoint, the probe's finding is kept because its evidence shows the exploit working.
 
+**Re-scanning.** A finding has a stable identity within its target: the tool rule plus the endpoint and parameter (site-wide issues such as a missing header use the rule alone). Scanning the same target again does not create duplicates: findings already known are linked to the new scan, keep their review decision and analysis, and are not alerted again. Only new findings are analysed and announced; the scan summary says how many were new and how many were seen before. A finding the latest scan covered but did not report again is marked "not found in scan N", which is how a fix shows up after a retest. Databases from earlier versions are de-duplicated automatically on startup, keeping the copy that has a review decision.
+
 ZAP's active scan runs with a policy containing only the scan rules for the selected categories (`ZAP_ACTIVE_SCANNERS` in `taxonomy.py`). ZAP alerts on URLs outside the scope are discarded.
 
 ## Safety controls

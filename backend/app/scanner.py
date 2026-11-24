@@ -12,10 +12,13 @@ import threading
 import traceback
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+
 from .db import session_scope
-from .models import Endpoint, Finding, Scan
+from .models import Endpoint, Finding, FindingScan, Scan
 from .taxonomy import ZAP_ACTIVE_SCANNERS
 from .tools import curl, probes
+from .tools.drafts import make_fingerprint
 from .tools.normalize import dedupe, normalize_zap_alerts
 from .tools.zap import ZapClient, ZapError
 
@@ -283,6 +286,12 @@ def _curl_probes(ctx, prog, endpoints) -> list:
 
 
 def _store(scan_id: int, drafts, endpoints, prog) -> list[int]:
+    """Save endpoints and findings; return the ids of findings that are new.
+
+    A finding the target already has (same fingerprint) is not stored again:
+    the existing one is linked to this scan, so its review decision, analysis
+    and alerts carry over to the re-scan.
+    """
     with session_scope() as db:
         scan = db.get(Scan, scan_id)
         seen_urls: set[tuple[str, str]] = set()
@@ -294,9 +303,30 @@ def _store(scan_id: int, drafts, endpoints, prog) -> list[int]:
                 scan_id=scan.id, method=method, url=url, status_code=status,
                 source="zap-spider" if status is None else "curl",
             ))
-        rows = []
+
+        known = {
+            f.fingerprint: f
+            for f in db.scalars(select(Finding).where(Finding.target_id == scan.target_id, Finding.fingerprint != ""))
+        }
+        rows: list[Finding] = []
+        recurring = 0
+        linked: set[int] = set()
         for d in drafts:
-            rows.append(Finding(
+            fp = d.fingerprint()
+            existing = known.get(fp)
+            if existing is not None:
+                if existing.id in linked:
+                    continue
+                linked.add(existing.id)
+                recurring += 1
+                existing.times_seen = (existing.times_seen or 1) + 1
+                existing.last_seen_scan_id = scan.id
+                urls = list(dict.fromkeys([*(existing.affected_urls or []), *(d.affected_urls or [d.url])]))
+                existing.affected_urls = urls[:200]
+                existing.occurrences = max(existing.occurrences or 1, d.occurrences)
+                db.add(FindingScan(finding_id=existing.id, scan_id=scan.id))
+                continue
+            f = Finding(
                 scan_id=scan.id,
                 target_id=scan.target_id,
                 source=d.source,
@@ -319,7 +349,84 @@ def _store(scan_id: int, drafts, endpoints, prog) -> list[int]:
                 occurrences=d.occurrences,
                 affected_urls=d.affected_urls or [d.url],
                 ai_status="pending",
-            ))
+                fingerprint=fp,
+                times_seen=1,
+                last_seen_scan_id=scan.id,
+            )
+            known[fp] = f
+            rows.append(f)
         db.add_all(rows)
         db.flush()
-        return [r.id for r in rows]
+        for f in rows:
+            linked.add(f.id)
+            db.add(FindingScan(finding_id=f.id, scan_id=scan.id))
+        new_ids = [r.id for r in rows]
+    # Logged after the transaction above has committed: prog.log writes to
+    # the scan row in its own session, and SQLite allows one writer at a time.
+    if recurring:
+        prog.log(f"{len(new_ids)} new finding(s); {recurring} already known from earlier scans "
+                 "(their decisions and analysis are kept)")
+    return new_ids
+
+
+def fingerprint_of(f: Finding) -> str:
+    """Fingerprint for a stored finding (used to backfill older databases)."""
+    from urllib.parse import urlsplit
+
+    site_wide = f.source == "zap" and not f.attack
+    path = "" if site_wide else urlsplit(f.url).path
+    if f.tool_rule_id == "curl:stack-trace":
+        path = "/api/<unknown route>"
+    return make_fingerprint(f.source, f.tool_rule_id, f.method, path, f.param)
+
+
+def merge_duplicate_findings() -> int:
+    """Backfill fingerprints and merge findings duplicated by earlier re-scans.
+
+    For each target and fingerprint one finding is kept: the one with a review
+    decision if any, otherwise the oldest. The others' scans, URLs and alerts
+    move to it before they are deleted. Returns the number of rows merged.
+    """
+    from .models import Notification
+
+    merged = 0
+    with session_scope() as db:
+        rows = list(db.scalars(select(Finding).order_by(Finding.id)))
+        if not rows:
+            return 0
+        links = {(fs.finding_id, fs.scan_id) for fs in db.scalars(select(FindingScan))}
+        groups: dict[tuple[int, str], list[Finding]] = {}
+        for f in rows:
+            if not f.fingerprint:
+                f.fingerprint = fingerprint_of(f)
+            if (f.id, f.scan_id) not in links:
+                db.add(FindingScan(finding_id=f.id, scan_id=f.scan_id))
+                links.add((f.id, f.scan_id))
+            if f.last_seen_scan_id is None:
+                f.last_seen_scan_id = f.scan_id
+            groups.setdefault((f.target_id, f.fingerprint), []).append(f)
+        db.flush()
+
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            decided = [f for f in group if f.status != "pending"]
+            keep = (decided or group)[0]
+            scan_ids = {sid for (fid, sid) in links if fid in {f.id for f in group}}
+            for f in group:
+                if f is keep:
+                    continue
+                db.query(Notification).filter(Notification.finding_id == f.id).update(
+                    {Notification.finding_id: keep.id}, synchronize_session=False)
+                keep.affected_urls = list(dict.fromkeys([*(keep.affected_urls or []), *(f.affected_urls or [])]))[:200]
+                db.delete(f)
+                merged += 1
+            db.flush()
+            for sid in scan_ids:
+                if (keep.id, sid) not in links:
+                    db.add(FindingScan(finding_id=keep.id, scan_id=sid))
+                    links.add((keep.id, sid))
+            keep.scan_id = min(scan_ids)
+            keep.last_seen_scan_id = max(scan_ids)
+            keep.times_seen = len(scan_ids)
+    return merged

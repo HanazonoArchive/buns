@@ -94,6 +94,7 @@ class ScanOut(_Out):
     started_at: datetime | None
     finished_at: datetime | None
     finding_count: int = 0
+    new_finding_count: int = 0
     endpoint_count: int = 0
 
 
@@ -134,6 +135,10 @@ class FindingSummary(_Out):
     effective_severity: str
     occurrences: int
     created_at: datetime
+    target_name: str = ""
+    times_seen: int = 1
+    last_seen_scan_id: int | None = None
+    not_in_latest_scan: int | None = None
 
 
 class FindingDetail(FindingSummary):
@@ -161,6 +166,7 @@ class FindingDetail(FindingSummary):
     review_note: str
     reviewed_at: datetime | None
     affected_urls: list[str] = Field(default_factory=list)
+    seen_in_scans: list[int] = Field(default_factory=list)
     curl_command: str = ""
 
 
