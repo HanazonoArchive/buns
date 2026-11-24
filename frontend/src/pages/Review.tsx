@@ -32,7 +32,7 @@ import {
 import { CodeBlock, CvssBreakdown, HttpMessage } from "../components/evidence";
 import { DeliveryChips } from "../components/Bell";
 import { useToast } from "../components/toast";
-import { ErrorLine, Kbd, ReviewTag, Sev, Skeleton, usePoll } from "../components/ui";
+import { ErrorLine, Kbd, Sev, Skeleton, usePoll } from "../components/ui";
 
 type Tab = "request" | "response" | "reproduce" | "sent";
 
@@ -318,8 +318,10 @@ function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetai
     return (
       <div className="decision decided">
         <p>
-          <ReviewTag s={f.status} />
-          {f.status === "confirmed" && <span className="inline">as <Sev s={f.final_severity} size="sm" /></span>}
+          <span className={`status-text ${f.status}`}>{f.status === "confirmed" ? "Confirmed" : "False positive"}</span>
+          {f.status === "confirmed" && f.final_severity && (
+            <span>as <span className={`status-text sev-t-${f.final_severity}`}>{SEVERITY_LABEL[f.final_severity as Severity]}</span></span>
+          )}
           <span>by <b>{f.reviewer}</b>, {when(f.reviewed_at)}</span>
           {f.review_note && <span className="dim note-quote">“{f.review_note}”</span>}
         </p>
