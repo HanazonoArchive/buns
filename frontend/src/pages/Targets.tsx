@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Globe, Plus, Target as TargetIcon, UserRound } from "lucide-react";
+import { ChevronRight, Globe, ListChecks, Plus, Radar, Target as TargetIcon, UserRound } from "lucide-react";
 import { api, plural } from "../api";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/toast";
@@ -116,27 +116,38 @@ export default function Targets() {
         </Empty>
       )}
       {data && data.length > 0 && (
-        <ul className="target-list">
+        <div className="target-grid">
           {data.map((t) => (
-            <li key={t.id}>
-              <Link to={`/targets/${t.id}`} className="target-card">
+            <Link key={t.id} to={`/targets/${t.id}`} className="target-card">
+              <div className="target-card-header">
                 <span className="target-icon"><Globe size={20} aria-hidden /></span>
-                <span className="target-main">
+                <div className="target-main">
                   <span className="target-name">{t.name}</span>
-                  <span className="mono dim small">{t.base_url}</span>
-                </span>
-                <span className="target-meta">
+                  <span className="mono dim small target-url">{t.base_url}</span>
+                </div>
+                <ChevronRight size={18} className="target-chevron" aria-hidden />
+              </div>
+
+              <div className="target-card-stats">
+                <span className="target-stat-pill">
+                  <Radar size={13} aria-hidden />
                   <span>{plural(t.scan_count, "scan")}</span>
-                  <span>{plural(t.finding_count, "finding")}</span>
-                  <span className={t.owner_email ? "" : "dim"}>
-                    <UserRound size={13} aria-hidden /> {t.owner_name || t.owner_email || "No owner set"}
-                  </span>
                 </span>
-                <ChevronRight size={18} className="dim" aria-hidden />
-              </Link>
-            </li>
+                <span className="target-stat-pill">
+                  <ListChecks size={13} aria-hidden />
+                  <span>{plural(t.finding_count, "finding")}</span>
+                </span>
+              </div>
+
+              <div className="target-card-footer">
+                <span className={t.owner_email ? "target-owner" : "target-owner dim"}>
+                  <UserRound size={13} aria-hidden />
+                  <span>{t.owner_name || t.owner_email || "No owner set"}</span>
+                </span>
+              </div>
+            </Link>
           ))}
-        </ul>
+        </div>
       )}
     </>
   );

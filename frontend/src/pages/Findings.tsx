@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, Inbox, Loader2, Search, X } from "lucide-react";
+import { Bot, ChevronRight, Inbox, Loader2, Search, Sparkles, X } from "lucide-react";
 import { api, CATEGORIES, CATEGORY_LABEL, fid, pathOf, SEVERITIES, SEVERITY_LABEL, type FindingSummary } from "../api";
 import { Empty, ErrorLine, PageHead, ReviewTag, Sev, Skeleton, usePoll } from "../components/ui";
 
@@ -14,15 +14,23 @@ const STATUSES: [string, string][] = [
 function AiCell({ f }: { f: FindingSummary }) {
   if (f.ai_status === "pending" || f.ai_status === "running")
     return (
-      <span className="dim inline">
-        <Loader2 size={14} className="spin" aria-hidden /> Analysing
+      <span className="ai-status-pill analyzing">
+        <Loader2 size={13} className="spin" aria-hidden />
+        <span>Analysing</span>
       </span>
     );
-  if (f.ai_status === "failed") return <span className="warn-text">Analysis failed</span>;
+  if (f.ai_status === "failed")
+    return (
+      <span className="ai-status-pill failed" title="Analysis failed">
+        <Sparkles size={12} />
+        <span>Failed</span>
+      </span>
+    );
   return (
-    <span className="inline">
+    <span className="ai-status-pill done">
+      <Bot size={13} className="ai-status-icon" aria-hidden />
       <Sev s={f.ai_severity} size="sm" />
-      {f.ai_cvss_score !== null && <span className="mono dim">{f.ai_cvss_score.toFixed(1)}</span>}
+      {f.ai_cvss_score !== null && <span className="mono cvss-score-tag">{f.ai_cvss_score.toFixed(1)}</span>}
     </span>
   );
 }

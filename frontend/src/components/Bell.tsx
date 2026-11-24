@@ -140,7 +140,7 @@ export default function Bell() {
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Icon size={19} />
+        <Icon size={15} strokeWidth={2.2} />
         {unread > 0 && <span className="bell-count">{unread > 99 ? "99+" : unread}</span>}
       </button>
       {open && (

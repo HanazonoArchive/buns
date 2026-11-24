@@ -17,18 +17,34 @@ function SeverityBars({ d }: { d: Dashboard }) {
           </span>
           <span role="cell" className="sevbar-track">
             {c > 0 && <span className={`sevbar-fill sev-bg-${s}`} style={{ width: `${(c / max) * 100}%` }} title={`${c} confirmed`} />}
-            {o > 0 && <span className={`sevbar-fill sevbar-open sev-bd-${s}`} style={{ width: `${(o / max) * 100}%` }} title={`${o} awaiting review`} />}
+            {o > 0 && (
+              <span
+                className={`sevbar-fill sevbar-open sev-bg-${s}`}
+                style={{ width: `${(o / max) * 100}%` }}
+                title={`${o} awaiting review`}
+              />
+            )}
           </span>
           <span role="cell" className="sevbar-n">
-            <b>{c}</b>
-            {o > 0 && <span className="dim"> +{o} open</span>}
+            {c === 0 && o === 0 ? (
+              <span className="dim">—</span>
+            ) : c === 0 ? (
+              <span className="strong">{o} open</span>
+            ) : o === 0 ? (
+              <b>{c}</b>
+            ) : (
+              <>
+                <b>{c}</b>
+                <span className="dim"> +{o} open</span>
+              </>
+            )}
           </span>
         </div>
       ))}
-      <p className="legend">
-        <span className="legend-solid" /> Confirmed
-        <span className="legend-open" /> Awaiting review
-      </p>
+      <div className="legend">
+        <span className="legend-item"><span className="legend-solid" /> Confirmed</span>
+        <span className="legend-item"><span className="legend-open" /> Awaiting review</span>
+      </div>
     </div>
   );
 }
@@ -52,7 +68,7 @@ function Queue({ d }: { d: Dashboard }) {
             {analysing > 0 && ` ${analysing} still being analysed.`}
           </p>
         </div>
-        <Link className={`btn ${urgent ? "btn-danger" : "btn-primary"}`} to="/findings?status=pending">
+        <Link className="btn btn-primary" to="/findings?status=pending">
           Start reviewing <ArrowRight size={16} aria-hidden />
         </Link>
       </section>
@@ -154,10 +170,10 @@ export default function Overview() {
       <Queue d={d} />
 
       <div className="stats">
-        <Stat icon={Radar} label="Scans" value={d.scans} note={d.scans_running ? `${d.scans_running} running` : undefined} />
-        <Stat icon={ShieldAlert} label="Awaiting review" value={d.pending} tone={d.pending ? "stat-action" : ""} />
-        <Stat icon={ShieldCheck} label="Confirmed" value={d.confirmed} />
-        <Stat icon={ShieldX} label="False positives" value={d.rejected} />
+        <Stat icon={Radar} label="Scans" value={d.scans} note={d.scans_running ? `${d.scans_running} running` : undefined} tone="stat-scans" />
+        <Stat icon={ShieldAlert} label="Awaiting review" value={d.pending} tone={d.pending ? "stat-urgent" : "stat-pending"} />
+        <Stat icon={ShieldCheck} label="Confirmed" value={d.confirmed} tone="stat-confirmed" />
+        <Stat icon={ShieldX} label="False positives" value={d.rejected} tone="stat-rejected" />
       </div>
 
       <div className="grid-2">

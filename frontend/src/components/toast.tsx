@@ -24,8 +24,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (t: Omit<Toast, "id">) => {
       const id = next.current++;
-      setItems((xs) => [...xs.slice(-3), { ...t, id }]);
-      window.setTimeout(() => dismiss(id), t.kind === "error" || t.kind === "alert" ? 8000 : 4500);
+      // Max 2 notifications stack; newest/last notification placed below
+      setItems((xs) => [...xs.slice(-1), { ...t, id }]);
+      // Dismisses after 3 seconds
+      window.setTimeout(() => dismiss(id), 3000);
     },
     [dismiss],
   );

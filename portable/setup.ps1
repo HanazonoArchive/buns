@@ -118,10 +118,13 @@ $pyUrl  = "https://github.com/astral-sh/python-build-standalone/releases/downloa
 Fetch $pyUrl $pyFile
 Unpack $pyFile 'python'
 $Py = Join-Path $RT 'python\python.exe'
+# Ensure global/system pip.ini (e.g. require-virtualenv = true) does not block portable install
+"[global]`r`nrequire-virtualenv = false" | Set-Content -Encoding ASCII (Join-Path $RT 'python\pip.ini')
+$env:PIP_REQUIRE_VIRTUALENV = '0'
 Info 'installing back-end packages (1-5 minutes, details in portable\logs\pip.log)'
 $pipLog = Join-Path $Logs 'pip.log'
 $req = Join-Path $Root 'backend\requirements.txt'
-$code = Invoke-Cmd "`"$Py`" -m pip install --disable-pip-version-check --no-warn-script-location -r `"$req`" > `"$pipLog`" 2>&1"
+$code = Invoke-Cmd "set PIP_REQUIRE_VIRTUALENV=0 && `"$Py`" -m pip install --disable-pip-version-check --no-warn-script-location -r `"$req`" > `"$pipLog`" 2>&1"
 if ($code -ne 0) { Fail 'installing the back-end packages failed; see portable\logs\pip.log' }
 Info 'back-end packages installed'
 
@@ -147,7 +150,11 @@ $npm = Join-Path $NodeDir 'npm.cmd'
 $web = Join-Path $Root 'frontend'
 Info 'installing and building the front end (2-4 minutes)'
 $code = Invoke-Cmd "`"$npm`" ci --no-audit --no-fund --loglevel=error > `"$buildLog`" 2>&1" $web
-if ($code -ne 0) { Fail "npm ci failed; see portable\logs\frontend-build.log" }
+if ($code -ne 0) {
+    # If npm ci failed due to a file lock in node_modules, retry with npm install
+    $code = Invoke-Cmd "`"$npm`" install --no-audit --no-fund --loglevel=error >> `"$buildLog`" 2>&1" $web
+}
+if ($code -ne 0) { Fail "npm build/install failed; see portable\logs\frontend-build.log" }
 $code = Invoke-Cmd "`"$npm`" run build >> `"$buildLog`" 2>&1" $web
 if ($code -ne 0) { Fail "front-end build failed; see portable\logs\frontend-build.log" }
 $static = Join-Path $Root 'backend\static'
