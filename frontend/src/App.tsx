@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import {
   BellRing,
   FileText,
@@ -46,6 +46,20 @@ function TopBar() {
   );
 }
 
+/** Only the content area scrolls; send it back to the top on navigation. */
+function Scroller({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    ref.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+  return (
+    <div className="scroller" ref={ref}>
+      {children}
+    </div>
+  );
+}
+
 export default function App() {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -79,10 +93,10 @@ export default function App() {
               title={collapsed ? "Expand sidebar" : undefined}
             >
               <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden className="brand-logo">
-                <rect width="32" height="32" rx="8" fill="#1d2840" />
+                <rect width="32" height="32" rx="8" fill="#18233e" />
                 <circle cx="11.5" cy="16" r="4.6" fill="#e8edf6" />
                 <circle cx="20.5" cy="16" r="4.6" fill="#e8edf6" />
-                <circle cx="16" cy="16" r="4.6" fill="#5b7cff" />
+                <circle cx="16" cy="16" r="4.6" fill="#7083f0" />
               </svg>
               {!collapsed && (
                 <div className="brand-meta">
@@ -114,7 +128,7 @@ export default function App() {
                 <span className="rail-link-icon">
                   <Icon size={18} strokeWidth={2} aria-hidden />
                 </span>
-                {!collapsed && <span className="rail-link-label">{label}</span>}
+                <span className="rail-link-label">{label}</span>
               </NavLink>
             ))}
           </nav>
@@ -122,6 +136,7 @@ export default function App() {
 
         <div className="workspace">
           <TopBar />
+          <Scroller>
           <main className="main">
             <Routes>
               <Route path="/" element={<Overview />} />
@@ -136,6 +151,7 @@ export default function App() {
               <Route path="*" element={<p className="pad">This page does not exist.</p>} />
             </Routes>
           </main>
+          </Scroller>
         </div>
       </div>
     </ToastProvider>

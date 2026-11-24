@@ -41,10 +41,6 @@ function SeverityBars({ d }: { d: Dashboard }) {
           </span>
         </div>
       ))}
-      <div className="legend">
-        <span className="legend-item"><span className="legend-solid" /> Confirmed</span>
-        <span className="legend-item"><span className="legend-open" /> Awaiting review</span>
-      </div>
     </div>
   );
 }

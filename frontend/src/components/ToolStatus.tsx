@@ -41,6 +41,7 @@ export function ToolStatusGroup({ compact = true }: { compact?: boolean; showLab
         aria-label={isDeepSeek ? "AI Supported" : "Heuristic Rules Active"}
       >
         {isDeepSeek ? <Bot size={15} strokeWidth={2.2} /> : <Sparkles size={15} strokeWidth={2.2} />}
+        <span className="status-label">{isDeepSeek ? "AI" : "Rules"}</span>
         <div className="status-tooltip" role="tooltip">
           <div className="status-tooltip-header">
             <span className="status-tooltip-dot dot-green" />
@@ -59,6 +60,7 @@ export function ToolStatusGroup({ compact = true }: { compact?: boolean; showLab
         aria-label={zapOk ? "ZAP Active" : "ZAP Inactive"}
       >
         <Zap size={15} strokeWidth={2.2} />
+        <span className="status-label">ZAP</span>
         <div className="status-tooltip" role="tooltip">
           <div className="status-tooltip-header">
             <span className={`status-tooltip-dot dot-${zapOk ? "green" : "slate"}`} />
@@ -75,6 +77,7 @@ export function ToolStatusGroup({ compact = true }: { compact?: boolean; showLab
         aria-label={data.curl ? "cURL Active" : "cURL Inactive"}
       >
         <Terminal size={15} strokeWidth={2.2} />
+        <span className="status-label">cURL</span>
         <div className="status-tooltip" role="tooltip">
           <div className="status-tooltip-header">
             <span className={`status-tooltip-dot dot-${data.curl ? "green" : "slate"}`} />

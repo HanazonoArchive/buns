@@ -54,7 +54,7 @@ function Lifecycle({ f, notices }: { f: FindingDetail; notices: Notice[] | null 
     },
     {
       icon: ShieldCheck,
-      label: f.status === "rejected" ? "Rejected" : "Verified",
+      label: f.status === "rejected" ? "Rejected" : f.status === "pending" ? "Verify" : "Verified",
       detail: f.status === "pending" ? "Waiting for an assessor" : `${f.reviewer}, ${ago(f.reviewed_at)}`,
       state: f.status === "pending" ? (analysed ? "now" : "") : f.status === "rejected" ? "rejected" : "done",
     },
@@ -508,10 +508,10 @@ export default function Review() {
         </div>
       </div>
 
-      <DecisionBar f={f} onDone={onDone} />
       <p className="shortcuts dim small">
         Shortcuts: <Kbd>C</Kbd> confirm, <Kbd>X</Kbd> reject, <Kbd>J</Kbd> next, <Kbd>K</Kbd> previous
       </p>
+      <DecisionBar f={f} onDone={onDone} />
     </div>
   );
 }
