@@ -44,9 +44,15 @@ export default function ScanView() {
         }
         actions={
           done && s.finding_count > 0 && (
-            <Link className="btn btn-primary" to={`/findings?scan=${s.id}&status=pending`}>
-              Review {s.finding_count} findings <ArrowRight size={16} />
-            </Link>
+            s.new_finding_count > 0 ? (
+              <Link className="btn btn-primary" to={`/findings?scan=${s.id}&status=pending`}>
+                Review {s.new_finding_count} new {s.new_finding_count === 1 ? "finding" : "findings"} <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <Link className="btn" to={`/findings?scan=${s.id}&status=`}>
+                View {s.finding_count} findings <ArrowRight size={16} />
+              </Link>
+            )
           )
         }
       />
@@ -77,7 +83,10 @@ export default function ScanView() {
         {s.status === "failed" && s.error && <ErrorLine msg={s.error.split("\n")[0]} />}
         {done && (
           <p className="scan-summary">
-            <Bug size={15} aria-hidden /> {s.finding_count} findings from {s.endpoint_count} endpoints. Analysis runs in the background and you will be alerted when it is ready.
+            <Bug size={15} aria-hidden />
+            {s.finding_count === s.new_finding_count
+              ? `${s.finding_count} findings from ${s.endpoint_count} endpoints. Analysis runs in the background and you will be alerted when it is ready.`
+              : `${s.finding_count} findings from ${s.endpoint_count} endpoints: ${s.new_finding_count} new, ${s.finding_count - s.new_finding_count} already known from earlier scans (their decisions are kept).`}
           </p>
         )}
       </section>

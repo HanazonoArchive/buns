@@ -50,6 +50,7 @@ export interface Scan {
   started_at: string | null;
   finished_at: string | null;
   finding_count: number;
+  new_finding_count: number;
   endpoint_count: number;
 }
 
@@ -80,6 +81,11 @@ export interface FindingSummary {
   effective_severity: Severity;
   occurrences: number;
   created_at: string;
+  target_name: string;
+  times_seen: number;
+  last_seen_scan_id: number | null;
+  /** Id of the latest scan when it covered this finding but did not report it again. */
+  not_in_latest_scan: number | null;
 }
 
 export interface Remediation {
@@ -117,6 +123,7 @@ export interface FindingDetail extends FindingSummary {
   review_note: string;
   reviewed_at: string | null;
   affected_urls: string[];
+  seen_in_scans: number[];
   curl_command: string;
 }
 

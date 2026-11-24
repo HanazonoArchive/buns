@@ -464,6 +464,20 @@ export default function Review() {
               </dd>
             </div>
           )}
+          {f.seen_in_scans.length > 0 && (
+            <div>
+              <dt>Seen in</dt>
+              <dd>
+                {f.seen_in_scans.map((sid, i) => (
+                  <span key={sid}>
+                    {i > 0 && ", "}
+                    <Link to={`/scans/${sid}`}>scan {sid}</Link>
+                  </span>
+                ))}
+                {f.not_in_latest_scan && <span className="row-gone"> (not found in scan {f.not_in_latest_scan})</span>}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Tool rating</dt>
             <dd>

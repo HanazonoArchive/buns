@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, Inbox, Loader2, Search, X } from "lucide-react";
-import { api, CATEGORIES, CATEGORY_LABEL, fid, pathOf, SEVERITIES, SEVERITY_LABEL, type FindingSummary } from "../api";
+import { ChevronRight, Globe, Inbox, Loader2, Search, X } from "lucide-react";
+import { api, CATEGORIES, CATEGORY_LABEL, fid, pathOf, SEVERITIES, SEVERITY_LABEL, store, type FindingSummary } from "../api";
 import { Empty, ErrorLine, PageHead, Skeleton, usePoll } from "../components/ui";
 
 const STATUSES: [string, string][] = [
@@ -36,24 +36,39 @@ export default function Findings() {
   const status = params.get("status") ?? "pending";
   const category = params.get("category") ?? "";
   const severity = params.get("severity") ?? "";
-  const target = params.get("target") ?? "";
+  // The chosen target is remembered, so switching pages does not reset it.
+  const target = params.has("target") ? params.get("target") ?? "" : store.get("buns.findingsTarget");
   const scan = params.get("scan") ?? "";
   const [q, setQ] = useState("");
 
   const { data: targets } = usePoll(api.targets, [], () => false);
-  const { data: all, error } = usePoll(
-    () => api.findings({ target_id: target ? +target : undefined, scan_id: scan ? +scan : undefined }),
-    [target, scan],
+  const { data: fetched, error } = usePoll(
+    () => api.findings({ scan_id: scan ? +scan : undefined }),
+    [scan],
     (rows) => rows.some((f) => f.ai_status === "pending" || f.ai_status === "running"),
     2500,
   );
 
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
-    if (value || key === "status") next.set(key, value);
+    if (value || key === "status" || key === "target") next.set(key, value);
     else next.delete(key);
+    if (key === "target") store.set("buns.findingsTarget", value);
     setParams(next, { replace: true });
   };
+
+  const multi = (targets?.length ?? 0) > 1;
+  // Ignore a remembered target that no longer exists.
+  const activeTarget = target && targets?.some((t) => String(t.id) === target) ? target : "";
+  const perTarget = useMemo(() => {
+    const c: Record<string, number> = {};
+    (fetched ?? []).forEach((f) => (c[f.target_id] = (c[f.target_id] ?? 0) + 1));
+    return c;
+  }, [fetched]);
+  const all = useMemo(
+    () => (fetched ? fetched.filter((f) => !activeTarget || String(f.target_id) === activeTarget) : null),
+    [fetched, activeTarget],
+  );
 
   const base = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -73,11 +88,25 @@ export default function Findings() {
 
   const rows = status ? base.filter((f) => f.status === status) : base;
   const order = rows.map((f) => f.id);
-  const filtered = !!(category || severity || q || scan || target);
+  const filtered = !!(category || severity || q || scan || activeTarget);
 
   return (
     <>
       <PageHead title="Findings" sub="Everything the tools reported. Nothing reaches the report until an assessor confirms it against the evidence." />
+
+      {multi && targets && (
+        <div className="target-switch" role="tablist" aria-label="Target">
+          <span className="target-switch-label">Target</span>
+          <button role="tab" aria-selected={!activeTarget} className={!activeTarget ? "on" : ""} onClick={() => set("target", "")}>
+            All targets <span className="seg-count">{fetched?.length ?? 0}</span>
+          </button>
+          {targets.map((t) => (
+            <button key={t.id} role="tab" aria-selected={activeTarget === String(t.id)} className={activeTarget === String(t.id) ? "on" : ""} onClick={() => set("target", String(t.id))} title={t.base_url}>
+              <Globe size={14} aria-hidden /> {t.name} <span className="seg-count">{perTarget[t.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="seg" role="tablist" aria-label="Review status">
@@ -106,12 +135,6 @@ export default function Findings() {
             <option value="">Any category</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
           </select>
-          {targets && targets.length > 1 && (
-            <select aria-label="Target" value={target} onChange={(e) => set("target", e.target.value)}>
-              <option value="">All targets</option>
-              {targets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          )}
         </div>
       </div>
       {scan && (
@@ -156,6 +179,13 @@ export default function Findings() {
                       <span className="mono">{fid(f.id)}</span>
                       <span>{f.source === "zap" ? "OWASP ZAP" : "cURL probe"}</span>
                       {f.occurrences > 1 && <span>{f.occurrences} URLs</span>}
+                      {multi && !activeTarget && <span className="row-target"><Globe size={12} aria-hidden /> {f.target_name}</span>}
+                      {f.times_seen > 1 && <span title={`Reported by ${f.times_seen} scans of this target`}>seen in {f.times_seen} scans</span>}
+                      {f.not_in_latest_scan && (
+                        <span className="row-gone" title="The latest scan covered this category but did not report it. It may have been fixed.">
+                          not found in scan {f.not_in_latest_scan}
+                        </span>
+                      )}
                     </span>
                   </td>
                   <td className="endpoint">
