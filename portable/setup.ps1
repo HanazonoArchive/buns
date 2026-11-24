@@ -7,7 +7,8 @@
 #   setup-portable.cmd -NoZap          skip ZAP and Java (scans use cURL probes only)
 #   setup-portable.cmd -Force          re-extract everything
 #
-# Uses curl.exe and tar.exe, which ship with Windows 10 (1803+) and 11.
+# Uses curl.exe and tar.exe, which ship with Windows 10 (1803+) and 11,
+# and the .NET zip reader for .zip archives.
 
 param(
     [switch]$NoZap,
@@ -44,10 +45,12 @@ foreach ($tool in 'curl.exe', 'tar.exe') {
     }
 }
 
-if ($Root.Length -gt 70) {
-    Write-Host "Note: the project folder path is long ($($Root.Length) characters):" -ForegroundColor Yellow
+# Juice Shop contains paths up to 180 characters and Windows allows 260 by
+# default, so the project folder path should stay under about 45 characters.
+if ($Root.Length -gt 45) {
+    Write-Host "Warning: the project folder path is $($Root.Length) characters long:" -ForegroundColor Yellow
     Write-Host "  $Root" -ForegroundColor Yellow
-    Write-Host "  If extraction fails, move the folder somewhere shorter such as C:\buns and run setup again." -ForegroundColor Yellow
+    Write-Host "  Juice Shop may not extract. If setup fails, move the folder to C:\buns and run setup again." -ForegroundColor Yellow
 }
 
 New-Item -ItemType Directory -Force -Path $RT, $Cache, $Logs, (Join-Path $Here 'data'), (Join-Path $Here 'run') | Out-Null
@@ -80,11 +83,24 @@ function Fetch([string]$Url, [string]$File) {
 function Unpack([string]$File, [string]$Name) {
     $dest = Join-Path $RT $Name
     if ((Test-Path $dest) -and -not $Force) { Info "present  runtime\$Name"; return }
+    Info "unpacking $File (can take several minutes while Windows scans the files)"
     $tmp = Join-Path $RT ".tmp-$Name"
     foreach ($p in $tmp, $dest) { if (Test-Path $p) { Remove-Item -Recurse -Force $p } }
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    & tar.exe -xf (Join-Path $Cache $File) -C $tmp
-    if ($LASTEXITCODE -ne 0) { Fail "could not extract $File. If the path is long, move the project to C:\buns and retry." }
+    $archive = Join-Path $Cache $File
+    if ($File.EndsWith('.zip')) {
+        # tar.exe cannot read some file names in the Juice Shop zip; the .NET
+        # zip reader handles them.
+        try {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($archive, $tmp)
+        } catch {
+            Fail "could not extract $($File): $($_.Exception.Message) If the path is long, move the project to C:\buns and retry."
+        }
+    } else {
+        & tar.exe -xf $archive -C $tmp
+        if ($LASTEXITCODE -ne 0) { Fail "could not extract $File. If the path is long, move the project to C:\buns and retry." }
+    }
     $items = @(Get-ChildItem -Force $tmp)
     if ($items.Count -eq 1 -and $items[0].PSIsContainer) {
         Move-Item $items[0].FullName $dest
@@ -102,6 +118,7 @@ $pyUrl  = "https://github.com/astral-sh/python-build-standalone/releases/downloa
 Fetch $pyUrl $pyFile
 Unpack $pyFile 'python'
 $Py = Join-Path $RT 'python\python.exe'
+Info 'installing back-end packages (1-5 minutes, details in portable\logs\pip.log)'
 $pipLog = Join-Path $Logs 'pip.log'
 $req = Join-Path $Root 'backend\requirements.txt'
 $code = Invoke-Cmd "`"$Py`" -m pip install --disable-pip-version-check --no-warn-script-location -r `"$req`" > `"$pipLog`" 2>&1"
@@ -128,6 +145,7 @@ Say 'Front end'
 $buildLog = Join-Path $Logs 'frontend-build.log'
 $npm = Join-Path $NodeDir 'npm.cmd'
 $web = Join-Path $Root 'frontend'
+Info 'installing and building the front end (2-4 minutes)'
 $code = Invoke-Cmd "`"$npm`" ci --no-audit --no-fund --loglevel=error > `"$buildLog`" 2>&1" $web
 if ($code -ne 0) { Fail "npm ci failed; see portable\logs\frontend-build.log" }
 $code = Invoke-Cmd "`"$npm`" run build >> `"$buildLog`" 2>&1" $web
