@@ -15,6 +15,7 @@ import {
 } from "../api";
 import { KIND_ICON } from "../components/Bell";
 import { Modal } from "../components/Modal";
+import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
 import { Empty, ErrorLine, Field, PageHead, Panel, Skeleton, Switch, usePoll } from "../components/ui";
 
@@ -181,6 +182,7 @@ function ChannelCard({ ch, targets, onEdit, onChanged }: { ch: Channel; targets:
   const [confirm, setConfirm] = useState(false);
   const Icon = KIND_ICON[ch.kind];
   const target = targets.find((t) => t.id === ch.target_id);
+  const { canWrite } = useAuth();
 
   const test = async () => {
     setTesting(true);
@@ -216,14 +218,14 @@ function ChannelCard({ ch, targets, onEdit, onChanged }: { ch: Channel; targets:
           </p>
         )}
       </div>
-      <div className="channel-actions">
+      {canWrite && <div className="channel-actions">
         <Switch checked={ch.enabled} onChange={async (v) => { await api.updateChannel(ch.id, { enabled: v }); onChanged(); }} label={`${ch.name} enabled`} />
         <button className="btn btn-sm" onClick={test} disabled={testing}>
           {testing ? <Loader2 size={14} className="spin" /> : <SendIcon size={14} />} Send test
         </button>
         <button className="icon-btn" onClick={onEdit} aria-label={`Edit ${ch.name}`}><Pencil size={15} /></button>
         <button className="icon-btn danger" onClick={() => setConfirm(true)} aria-label={`Delete ${ch.name}`}><Trash2 size={15} /></button>
-      </div>
+      </div>}
       {confirm && (
         <Modal title={`Remove ${ch.name}?`} onClose={() => setConfirm(false)}
           footer={<><button className="btn" onClick={() => setConfirm(false)}>Keep it</button><button className="btn btn-danger" onClick={async () => { await api.deleteChannel(ch.id); setConfirm(false); onChanged(); }}>Remove channel</button></>}>
@@ -240,13 +242,15 @@ export default function SettingsPage() {
   const { data: summary } = usePoll(api.notificationSummary, [], () => false);
   const [form, setForm] = useState<{ initial: ChannelInput; id: number | null } | null>(null);
   const toast = useToast();
+  const { canWrite } = useAuth();
+  const addBtn = canWrite ? <button className="btn btn-primary" onClick={() => setForm({ initial: blank("discord"), id: null })}><Plus size={16} /> Add channel</button> : undefined;
 
   return (
     <>
       <PageHead
         title="Alert channels"
         sub="When a scan finds something serious, the people responsible should hear about it without having to open buns."
-        actions={<button className="btn btn-primary" onClick={() => setForm({ initial: blank("discord"), id: null })}><Plus size={16} /> Add channel</button>}
+        actions={addBtn}
       />
 
       <section className="flow">
@@ -258,7 +262,7 @@ export default function SettingsPage() {
       <ErrorLine msg={error} />
       {!channels && <div className="panel"><Skeleton rows={3} height={26} /></div>}
       {channels && channels.length === 0 && (
-        <Empty icon={BellRing} title="No channels yet" action={<button className="btn btn-primary" onClick={() => setForm({ initial: blank("discord"), id: null })}><Plus size={16} /> Add channel</button>}>
+        <Empty icon={BellRing} title="No channels yet" action={addBtn}>
           Alerts still appear in the bell. Add Discord, email, Telegram, Slack or a webhook to reach people outside the app.
         </Empty>
       )}

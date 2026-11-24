@@ -24,3 +24,18 @@ from fake_juice_shop import FakeJuiceShop  # noqa: E402
 def juice():
     with FakeJuiceShop() as server:
         yield server
+
+
+ADMIN_EMAIL = "sadmin@buns.com"
+ADMIN_PASSWORD = "test-admin-pass-1"
+
+
+def sign_in(client, email: str = ADMIN_EMAIL, password: str = ADMIN_PASSWORD):
+    """Sign the client in as the superadmin, doing the first-run password change if needed."""
+    r = client.post("/api/auth/login", json={"email": email, "password": password})
+    if r.status_code == 401 and email == ADMIN_EMAIL:
+        r = client.post("/api/auth/login", json={"email": email, "password": "buns"})
+        assert r.status_code == 200, r.text
+        r = client.post("/api/auth/change-password", json={"current_password": "buns", "new_password": password})
+    assert r.status_code == 200, r.text
+    return r.json()

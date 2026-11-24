@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from conftest import sign_in
 from fastapi.testclient import TestClient
 
 from app.tools import probes
@@ -23,6 +24,7 @@ def client():
     from app.main import app
 
     with TestClient(app) as c:
+        sign_in(c)
         yield c
 
 
@@ -93,13 +95,13 @@ def test_full_assessment_flow(client, juice):
     assert "ncc-1701" not in str(detail["ai_payload"]) and detail["ai_redactions"]
     assert detail["curl_command"].startswith("curl -i -X POST")
 
-    # Decisions need a reviewer, and a reason when they deviate from the suggestion.
-    assert client.post(f"/api/findings/{sqli['id']}/review", json={"decision": "confirm"}).status_code == 422
+    # The signed-in account is the reviewer; a reason is needed when the decision deviates from the suggestion.
     r = client.post(f"/api/findings/{sqli['id']}/review", json={"decision": "confirm", "severity": "high", "reviewer": "Morales"})
     assert r.status_code == 422 and "Explain" in r.json()["detail"]
     r = client.post(f"/api/findings/{sqli['id']}/review", json={"decision": "confirm", "reviewer": "Morales",
                                                                 "note": "Reproduced with cURL; token returned for admin."})
     assert r.json()["status"] == "confirmed" and r.json()["final_severity"] == "critical"
+    assert r.json()["reviewer"] == "Super Admin"  # the body's reviewer is ignored when signed in
 
     idor = next(f for f in findings if "basket" in f["title"])
     client.post(f"/api/findings/{idor['id']}/review", json={"decision": "confirm", "reviewer": "Morales"})

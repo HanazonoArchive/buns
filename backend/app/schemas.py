@@ -297,3 +297,76 @@ class MarkReadIn(BaseModel):
 class TestResult(BaseModel):
     ok: bool
     error: str = ""
+
+
+# -- accounts --------------------------------------------------------------
+
+Role = Literal["superadmin", "assessor", "viewer"]
+AssignableRole = Literal["assessor", "viewer"]
+
+
+class LoginIn(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=1, max_length=200)
+
+
+class MeOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: Role
+    custom_id: str
+    must_change_password: bool
+
+
+class UserOut(_Out):
+    id: int
+    email: str
+    name: str
+    role: Role
+    custom_id: str
+    active: bool
+    must_change_password: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class UserIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=200)
+    role: AssignableRole = "assessor"
+    custom_id: str = Field(default="", max_length=60)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class UserPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    role: AssignableRole | None = None
+    custom_id: str | None = Field(default=None, max_length=60)
+    active: bool | None = None
+
+
+class ResetPasswordIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class AuditOut(_Out):
+    id: int
+    created_at: datetime
+    kind: str
+    action: str
+    message: str
+    actor_email: str
+    actor_name: str
+    actor_role: str
+    ip: str
+    method: str
+    path: str
+    status: int | None
+    duration_ms: int | None
+    detail: dict[str, Any]

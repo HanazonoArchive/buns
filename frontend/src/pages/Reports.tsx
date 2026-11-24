@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Download, FileText, FileDown, Loader2 } from "lucide-react";
+import { useAuth } from "../auth";
 import { api, plural, store, when } from "../api";
 import { useToast } from "../components/toast";
 import { Empty, ErrorLine, Field, PageHead, Panel, Sev, usePoll } from "../components/ui";
@@ -12,7 +13,8 @@ export default function Reports() {
   const targetId = Number(params.get("target")) || targets?.[0]?.id || 0;
   const { data: dash } = usePoll(() => (targetId ? api.dashboard(targetId) : Promise.resolve(null)), [targetId], () => false);
   const { data: reports, refresh } = usePoll(() => api.reports(), [], () => false);
-  const [preparedBy, setPreparedBy] = useState(() => store.get("buns.preparedBy"));
+  const { me, canWrite } = useAuth();
+  const [preparedBy, setPreparedBy] = useState(() => store.get("buns.preparedBy") || me.name);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -40,7 +42,7 @@ export default function Reports() {
     <>
       <PageHead title="Reports" sub="A PDF of the confirmed findings with their evidence, ratings and fixes, ready to hand to the system owner." />
 
-      {targets && targets.length === 0 ? (
+      {!canWrite ? null : targets && targets.length === 0 ? (
         <Empty icon={FileText} title="Nothing to report yet">Register a target and review its findings before generating a report.</Empty>
       ) : (
         <Panel title="New report" icon={FileDown} className="report-form">

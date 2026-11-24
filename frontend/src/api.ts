@@ -223,6 +223,57 @@ export interface Health {
   allowed_hosts: string[];
 }
 
+export type Role = "superadmin" | "assessor" | "viewer";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  superadmin: "Superadmin",
+  assessor: "Assessor",
+  viewer: "Viewer",
+};
+
+export const ROLE_HELP: Record<Exclude<Role, "superadmin">, string> = {
+  assessor: "Registers targets, runs scans, reviews findings and generates reports.",
+  viewer: "Reads targets, findings and reports. Cannot change anything.",
+};
+
+export interface Me {
+  id: number;
+  email: string;
+  name: string;
+  role: Role;
+  custom_id: string;
+  must_change_password: boolean;
+}
+
+export interface Account extends Omit<Me, "must_change_password"> {
+  active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export type AuditKind = "event" | "request" | "system";
+
+export interface AuditEntry {
+  id: number;
+  created_at: string;
+  kind: AuditKind;
+  action: string;
+  message: string;
+  actor_email: string;
+  actor_name: string;
+  actor_role: string;
+  ip: string;
+  method: string;
+  path: string;
+  status: number | null;
+  duration_ms: number | null;
+  detail: Record<string, unknown>;
+}
+
+/** Fired when the server says the session is gone; the app returns to the sign-in screen. */
+export const SIGNED_OUT = "buns:signed-out";
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -244,6 +295,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* not JSON */
     }
+    if (res.status === 401 && path !== "/auth/login") window.dispatchEvent(new Event(SIGNED_OUT));
     throw new ApiError(res.status, message);
   }
   return res.status === 204 ? (undefined as T) : res.json();
@@ -294,7 +346,38 @@ export const api = {
     request<Channel>(`/channels/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteChannel: (id: number) => request<void>(`/channels/${id}`, { method: "DELETE" }),
   testChannel: (id: number) => post<{ ok: boolean; error: string }>(`/channels/${id}/test`),
+
+  me: () => request<Me>("/auth/me"),
+  login: (email: string, password: string) => post<Me>("/auth/login", { email, password }),
+  logout: () => post<void>("/auth/logout"),
+  changePassword: (current_password: string, new_password: string) =>
+    post<Me>("/auth/change-password", { current_password, new_password }),
+
+  users: () => request<Account[]>("/users"),
+  createUser: (body: { name: string; email: string; role: Role; custom_id: string; password: string }) => post<Account>("/users", body),
+  updateUser: (id: number, body: Partial<Pick<Account, "name" | "role" | "custom_id" | "active">>) =>
+    request<Account>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  resetPassword: (id: number, password: string) => post<Account>(`/users/${id}/reset-password`, { password }),
+  deleteUser: (id: number) => request<void>(`/users/${id}`, { method: "DELETE" }),
+
+  audit: (f: { kind?: string; q?: string; actor?: string; before?: number; limit?: number }) =>
+    request<AuditEntry[]>(`/audit${qs(f)}`),
+  auditExportUrl: (f: { kind?: string; q?: string; actor?: string }) => `/api/audit/export${qs(f)}`,
 };
+
+/** A readable temporary password: three short words and two digits, no look-alike characters. */
+export function temporaryPassword() {
+  const words = ["amber", "brisk", "cedar", "delta", "ember", "fjord", "gale", "harbor", "indigo", "juniper", "kelp",
+    "lumen", "maple", "nectar", "onyx", "pebble", "quartz", "raven", "sable", "tundra", "umber", "violet", "willow", "zephyr"];
+  const n = new Uint32Array(4);
+  crypto.getRandomValues(n);
+  return `${words[n[0] % words.length]}-${words[n[1] % words.length]}-${words[n[2] % words.length]}-${10 + (n[3] % 90)}`;
+}
+
+export function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? parts.at(-1)![0] : "")).toUpperCase();
+}
 
 /** Notification links are absolute; turn same-origin ones into router paths. */
 export function localPath(link: string): string | null {

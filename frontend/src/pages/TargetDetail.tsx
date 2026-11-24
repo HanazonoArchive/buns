@@ -15,6 +15,7 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
+import { useAuth } from "../auth";
 import { api, CATEGORIES, CATEGORY_LABEL, when, type Category, type Target } from "../api";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/toast";
@@ -147,6 +148,7 @@ export default function TargetDetail() {
   const { data: scans } = usePoll(() => api.scans(id), [id], (v) => v.some((s) => s.status === "running" || s.status === "queued"), 2000);
   const [editOwner, setEditOwner] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { canWrite } = useAuth();
 
   useEffect(() => setEditOwner(false), [id]);
 
@@ -219,11 +221,11 @@ export default function TargetDetail() {
               </table>
             )}
           </Panel>
-          <button className="link danger small inline" onClick={() => setConfirmDelete(true)}><Trash2 size={14} /> Delete this target</button>
+          {canWrite && <button className="link danger small inline" onClick={() => setConfirmDelete(true)}><Trash2 size={14} /> Delete this target</button>}
         </div>
 
         <div className="stack">
-          <Panel title="System owner" icon={UserRound} actions={<button className="icon-btn" onClick={() => setEditOwner(true)} aria-label="Edit owner"><Pencil size={15} /></button>}>
+          <Panel title="System owner" icon={UserRound} actions={canWrite ? <button className="icon-btn" onClick={() => setEditOwner(true)} aria-label="Edit owner"><Pencil size={15} /></button> : undefined}>
             {t.owner_email || t.owner_name ? (
               <div className="owner">
                 <span className="avatar" aria-hidden>{(t.owner_name || t.owner_email).slice(0, 1).toUpperCase()}</span>
@@ -240,7 +242,13 @@ export default function TargetDetail() {
               <span>Alerts go out through your <Link to="/settings">alert channels</Link>.</span>
             </p>
           </Panel>
-          <StartScan targetId={t.id} running={running} />
+          {canWrite ? (
+            <StartScan targetId={t.id} running={running} />
+          ) : (
+            <Panel title="Start a scan" icon={Radar}>
+              <p className="dim small">Your account is a Viewer. Ask an assessor to run scans against this target.</p>
+            </Panel>
+          )}
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import threading
 import time
 
 import pytest
+from conftest import sign_in
 from fastapi.testclient import TestClient
 
 from app import notifier
@@ -112,6 +113,7 @@ def client():
     from app.main import app
 
     with TestClient(app) as c:
+        sign_in(c)
         yield c
 
 

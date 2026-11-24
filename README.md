@@ -67,13 +67,42 @@ Juice Shop is then at `http://localhost:3000` (the URL in the proposal) and buns
 
 If `DEEPSEEK_API_KEY` is empty, buns uses a built-in rules engine that maps each finding's CWE to a written explanation, CVSS vector and Express fix. The interface and the report label this as "Built-in rules" / `offline-rules`, never as model output. It lets the platform be demonstrated offline; the proposal's AI functions need the key.
 
+## Accounts and the activity log
+
+Every page and API route needs a signed-in account. On a fresh database buns creates one superadmin:
+
+| Email | First password |
+| --- | --- |
+| `sadmin@buns.com` | `buns` |
+
+The first sign-in opens a window that cannot be closed until the password is replaced (at least 8 characters, not the email, not `buns`). Every account the superadmin creates goes through the same step.
+
+| Role | Can do |
+| --- | --- |
+| Superadmin | Everything an assessor can, plus **Users** (create accounts, change roles, reset passwords, disable, delete) and **Logs**. Only `sadmin@buns.com` holds this role. |
+| Assessor | Register targets, run scans, confirm or reject findings, regenerate analysis, generate reports, manage alert channels. |
+| Viewer | Read everything else. Every button that changes something is hidden and the API refuses it with 403. |
+
+**Users** asks for the complete name, email, role, an optional custom ID (employee or student number) and a temporary password, which can be generated. After saving, the sign-in details are shown once so they can be sent through whatever channel the group uses. Role changes apply on the user's next click; disabling an account signs it out immediately.
+
+**Logs** is a raw, newest-first stream of three kinds of entry, searchable and downloadable as a `.log` file:
+
+- *Actions*: sign-ins and failed attempts, password changes, account changes, targets added or edited, scans started, decisions, reports, alert channels.
+- *Requests*: every change request the API received, with who, status code and duration.
+- *System*: what buns did on its own, such as scans completing or failing.
+
+Passwords and request bodies are never written to the log. Passwords are stored as scrypt hashes; sessions are random tokens held in an HttpOnly cookie (the database keeps only their SHA-256), expire after 12 hours idle or 7 days, and five wrong passwords in ten minutes lock that email out for a while. A finding's reviewer is now always the signed-in account.
+
+Forgot the superadmin password on a test machine? Stop buns and delete `backend/data/buns.db` (or the portable `portable/data/buns.db`); the account is recreated with `buns` on the next start, along with an empty database.
+
 ## A first assessment
 
+0. **Sign in** as `sadmin@buns.com` / `buns` and choose a new password.
 1. **Targets.** Open *OWASP Juice Shop (local lab)*. Check the scope. Use *Check whether a URL may be requested* to show that `http://example.com/` or `http://juice-shop:3000/socket.io/` is blocked.
 2. **New scan.** Leave all four categories selected. Active scan takes roughly 5 to 15 minutes on Juice Shop depending on the machine; untick it for a quick run (spider, passive scan and cURL probes only, about one minute).
 3. **Scan view.** Watch the phases and the activity log. Every request the probes send is listed with its status code.
 4. **Findings.** When the scan finishes, findings are analysed in the background. Open the first one.
-5. **Review.** Left: the request and response, with the payload and matched evidence highlighted. Right: the explanation, false-positive judgement and CVSS breakdown. *Sent for analysis* shows exactly what left the platform, after redaction. Enter your name, keep or change the severity, and confirm or reject. Changing the severity or rejecting requires a note.
+5. **Review.** Left: the request and response, with the payload and matched evidence highlighted. Right: the explanation, false-positive judgement and CVSS breakdown. *Sent for analysis* shows exactly what left the platform, after redaction. Keep or change the severity, and confirm or reject. Changing the severity or rejecting requires a note.
 6. **Remediation** is generated as soon as a finding is confirmed and appears under the analysis. Keyboard: `C` confirm, `X` reject, `J`/`K` next/previous.
 7. **Alerts.** While the scan ran, the bell lit up for each critical finding. Open it to see what was sent and to which channels; add a Discord or email channel under **Settings** and press **Send test**.
 8. **Reports.** Generate the PDF. It contains confirmed findings only; rejected ones are listed in an appendix with the reason.

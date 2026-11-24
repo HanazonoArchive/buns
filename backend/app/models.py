@@ -244,3 +244,58 @@ class FindingScan(Base):
 
     finding_id: Mapped[int] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"), primary_key=True)
     scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+ROLES = ("superadmin", "assessor", "viewer")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(20), default="assessor")
+    # Employee or student number; optional.
+    custom_id: Mapped[str] = mapped_column(String(60), default="")
+    password_hash: Mapped[str] = mapped_column(String(300))
+    must_change_password: Mapped[bool] = mapped_column(default=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuthSession(Base):
+    """A signed-in browser. Only a hash of the cookie token is stored."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+
+
+class AuditLog(Base):
+    """Append-only record of who did what. kind is event, request or system."""
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="event")
+    action: Mapped[str] = mapped_column(String(60))
+    message: Mapped[str] = mapped_column(Text, default="")
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_email: Mapped[str] = mapped_column(String(200), default="")
+    actor_name: Mapped[str] = mapped_column(String(120), default="")
+    actor_role: Mapped[str] = mapped_column(String(20), default="")
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    method: Mapped[str] = mapped_column(String(10), default="")
+    path: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

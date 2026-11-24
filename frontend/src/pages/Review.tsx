@@ -23,7 +23,6 @@ import {
   pathOf,
   SEVERITIES,
   SEVERITY_LABEL,
-  store,
   when,
   type FindingDetail,
   type Notice,
@@ -31,6 +30,7 @@ import {
 } from "../api";
 import { CodeBlock, CvssBreakdown, HttpMessage } from "../components/evidence";
 import { DeliveryChips } from "../components/Bell";
+import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
 import { ErrorLine, Kbd, Sev, Skeleton, usePoll } from "../components/ui";
 
@@ -167,7 +167,7 @@ function Evidence({ f }: { f: FindingDetail }) {
   );
 }
 
-function Analysis({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) {
+function Analysis({ f, onRetry }: { f: FindingDetail; onRetry?: () => void }) {
   const offline = f.ai_model === "offline-rules";
   return (
     <section className="card analysis">
@@ -189,7 +189,7 @@ function Analysis({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) {
         {f.ai_status === "failed" && (
           <>
             <ErrorLine msg={f.ai_error || "The analysis failed."} />
-            <button className="btn" onClick={onRetry}><RotateCcw size={15} /> Run analysis again</button>
+            {onRetry && <button className="btn" onClick={onRetry}><RotateCcw size={15} /> Run analysis again</button>}
             <p className="dim small">You can still decide on this finding from the evidence alone.</p>
           </>
         )}
@@ -215,7 +215,7 @@ function Analysis({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) {
               <h3>Suggested rating</h3>
               <CvssBreakdown vector={f.ai_cvss_vector} score={f.ai_cvss_score} severity={f.ai_severity} />
             </div>
-            <button className="link small inline" onClick={onRetry}><RotateCcw size={13} /> Re-run analysis</button>
+            {onRetry && <button className="link small inline" onClick={onRetry}><RotateCcw size={13} /> Re-run analysis</button>}
           </>
         )}
       </div>
@@ -223,7 +223,7 @@ function Analysis({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) {
   );
 }
 
-function Remediation({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) {
+function Remediation({ f, onRetry }: { f: FindingDetail; onRetry?: () => void }) {
   if (f.status !== "confirmed") return null;
   const r = f.remediation;
   return (
@@ -242,7 +242,7 @@ function Remediation({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) 
         {f.remediation_status === "failed" && (
           <>
             <ErrorLine msg={r?.error ?? "Remediation could not be generated."} />
-            <button className="btn" onClick={onRetry}><RotateCcw size={15} /> Try again</button>
+            {onRetry && <button className="btn" onClick={onRetry}><RotateCcw size={15} /> Try again</button>}
           </>
         )}
         {f.remediation_status === "done" && r && (
@@ -256,7 +256,7 @@ function Remediation({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) 
               </p>
             )}
             {r.references && r.references.length > 0 && <p className="dim small">References: {r.references.join("; ")}</p>}
-            <button className="link small inline" onClick={onRetry}><RotateCcw size={13} /> Regenerate</button>
+            {onRetry && <button className="link small inline" onClick={onRetry}><RotateCcw size={13} /> Regenerate</button>}
           </>
         )}
       </div>
@@ -266,13 +266,12 @@ function Remediation({ f, onRetry }: { f: FindingDetail; onRetry: () => void }) 
 
 function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetail, decision: string) => void }) {
   const suggested = (f.ai_severity || f.tool_severity) as Severity;
-  const [reviewer, setReviewer] = useState(() => f.reviewer || store.get("buns.reviewer"));
+  const { me, canWrite } = useAuth();
   const [severity, setSeverity] = useState<Severity>((f.final_severity || suggested) as Severity);
   const [note, setNote] = useState(f.review_note);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const noteRef = useRef<HTMLInputElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSeverity((f.final_severity || suggested) as Severity);
@@ -282,16 +281,10 @@ function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetai
 
   const decide = useCallback(
     async (decision: "confirm" | "reject" | "reset") => {
-      if (decision !== "reset" && !reviewer.trim()) {
-        setErr("Enter your name first; every decision records who made it.");
-        nameRef.current?.focus();
-        return;
-      }
       setBusy(true);
       setErr("");
       try {
-        if (reviewer) store.set("buns.reviewer", reviewer);
-        const out = await api.review(f.id, { decision, severity: decision === "confirm" ? severity : undefined, reviewer, note });
+        const out = await api.review(f.id, { decision, severity: decision === "confirm" ? severity : undefined, note });
         onDone(out, decision);
       } catch (e) {
         setErr((e as Error).message);
@@ -300,11 +293,11 @@ function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetai
         setBusy(false);
       }
     },
-    [f.id, note, onDone, reviewer, severity],
+    [f.id, note, onDone, severity],
   );
 
   useEffect(() => {
-    if (f.status !== "pending") return;
+    if (f.status !== "pending" || !canWrite) return;
     const onKey = (e: KeyboardEvent) => {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "c") { e.preventDefault(); decide("confirm"); }
@@ -312,7 +305,7 @@ function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetai
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [decide, f.status]);
+  }, [decide, f.status, canWrite]);
 
   if (f.status !== "pending") {
     return (
@@ -325,18 +318,28 @@ function DecisionBar({ f, onDone }: { f: FindingDetail; onDone: (f: FindingDetai
           <span>by <b>{f.reviewer}</b>, {when(f.reviewed_at)}</span>
           {f.review_note && <span className="dim note-quote">“{f.review_note}”</span>}
         </p>
-        <button className="btn" disabled={busy} onClick={() => decide("reset")}><RotateCcw size={15} /> Reopen</button>
+        {canWrite && <button className="btn" disabled={busy} onClick={() => decide("reset")}><RotateCcw size={15} /> Reopen</button>}
       </div>
     );
   }
 
   const changed = severity !== suggested;
+  if (!canWrite) {
+    return (
+      <div className="decision decided">
+        <p>
+          <span className="status-text pending">Waiting for an assessor</span>
+          <span className="dim">Your account is a Viewer, so you can read this finding but not decide on it.</span>
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="decision">
-      <label className="d-field">
+      <div className="d-field d-who">
         <span>Assessor</span>
-        <input ref={nameRef} value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="Your name" autoComplete="name" />
-      </label>
+        <b title={me.email}>{me.name}</b>
+      </div>
       <label className="d-field">
         <span>Severity</span>
         <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} className={`sev-select sev-t-${severity}`}>
@@ -373,6 +376,7 @@ export default function Review() {
   const order: number[] = (loc.state as { order?: number[] } | null)?.order ?? [];
   const fidNum = Number(id);
 
+  const { canWrite } = useAuth();
   const { data: f, error, refresh, setData } = usePoll(
     () => api.finding(fidNum),
     [fidNum],
@@ -501,8 +505,8 @@ export default function Review() {
       <div className="split">
         <Evidence f={f} />
         <div className="right">
-          <Analysis f={f} onRetry={() => api.reanalyze(f.id).then(setData).then(refresh)} />
-          <Remediation f={f} onRetry={() => api.remediate(f.id).then(setData).then(refresh)} />
+          <Analysis f={f} onRetry={canWrite ? () => api.reanalyze(f.id).then(setData).then(refresh) : undefined} />
+          <Remediation f={f} onRetry={canWrite ? () => api.remediate(f.id).then(setData).then(refresh) : undefined} />
           {notices && notices.length > 0 && (
             <section className="card">
               <header className="card-head"><h2>Alerts sent</h2></header>
@@ -525,7 +529,7 @@ export default function Review() {
       </div>
 
       <p className="shortcuts dim small">
-        Shortcuts: <Kbd>C</Kbd> confirm, <Kbd>X</Kbd> reject, <Kbd>J</Kbd> next, <Kbd>K</Kbd> previous
+        Shortcuts: {canWrite && <><Kbd>C</Kbd> confirm, <Kbd>X</Kbd> reject, </>}<Kbd>J</Kbd> next, <Kbd>K</Kbd> previous
       </p>
       <DecisionBar f={f} onDone={onDone} />
     </div>

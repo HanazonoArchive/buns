@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, Globe, ListChecks, Plus, Radar, Target as TargetIcon, UserRound } from "lucide-react";
+import { useAuth } from "../auth";
 import { api, plural } from "../api";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/toast";
@@ -99,20 +100,22 @@ function NewTarget({ onClose }: { onClose: () => void }) {
 export default function Targets() {
   const { data, error } = usePoll(api.targets, [], () => false);
   const [adding, setAdding] = useState(false);
+  const { canWrite } = useAuth();
+  const add = canWrite ? <button className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={16} /> Register target</button> : undefined;
 
   return (
     <>
       <PageHead
         title="Targets"
         sub="Applications you are authorised to test, the paths a scan may touch, and who to tell when something breaks."
-        actions={<button className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={16} /> Register target</button>}
+        actions={add}
       />
       {adding && <NewTarget onClose={() => setAdding(false)} />}
       <ErrorLine msg={error} />
       {!data && <div className="panel"><Skeleton rows={3} height={24} /></div>}
       {data && data.length === 0 && (
-        <Empty icon={TargetIcon} title="No targets yet" action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={16} /> Register target</button>}>
-          Register the local Juice Shop container to begin.
+        <Empty icon={TargetIcon} title="No targets yet" action={add}>
+          {canWrite ? "Register the local Juice Shop container to begin." : "An assessor has not registered anything yet."}
         </Empty>
       )}
       {data && data.length > 0 && (

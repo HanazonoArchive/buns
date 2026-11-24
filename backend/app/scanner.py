@@ -115,7 +115,13 @@ def _run(scan_id: int) -> None:
             scan.progress = 100
             scan.finished_at = _now()
         prog.log(f"Scan complete: {len(drafts)} findings, {len(endpoints)} endpoints recorded.")
-        from . import notifier
+        from . import audit, notifier
+
+        audit.system(
+            "scan.complete",
+            f"Scan #{scan_id} of {ctx['base_url']} completed: {len(drafts)} finding(s), {len(endpoints)} endpoint(s)",
+            detail={"scan_id": scan_id, "findings": len(drafts), "endpoints": len(endpoints)},
+        )
 
         if finding_ids:
             from .ai import engine
@@ -133,8 +139,9 @@ def _run(scan_id: int) -> None:
                 scan.phase = "failed"
                 scan.error = f"{exc}\n{traceback.format_exc()}"
                 scan.finished_at = _now()
-        from . import notifier
+        from . import audit, notifier
 
+        audit.system("scan.failed", f"Scan #{scan_id} failed: {exc}", detail={"scan_id": scan_id})
         notifier.safe_emit(notifier.on_scan_failed, scan_id)
     finally:
         _scans.pop(scan_id, None)
