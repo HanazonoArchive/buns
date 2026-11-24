@@ -553,4 +553,5 @@ if _static.is_dir():
         candidate = (_static / path).resolve()
         if path and candidate.is_file() and _static in candidate.parents:
             return FileResponse(candidate)
-        return FileResponse(_static / "index.html")
+        # index.html names the current asset files; never serve a stale copy.
+        return FileResponse(_static / "index.html", headers={"Cache-Control": "no-cache"})

@@ -19,6 +19,24 @@ die()  { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 [[ -x "$RT/python/bin/python3" && -d "$ROOT/backend/static" ]] || die "Run ./portable/setup.sh first."
 mkdir -p "$DATA" "$LOGS" "$RUN"
 
+# Rebuild the interface if its code changed since the last build (e.g. after git pull).
+WEB="$ROOT/frontend"
+INDEX="$ROOT/backend/static/index.html"
+if [[ -x "$RT/node/bin/node" ]] && { [[ ! -f "$INDEX" ]] || \
+     [[ -n "$(find "$WEB/src" "$WEB/index.html" "$WEB/package.json" "$WEB/package-lock.json" -newer "$INDEX" -print -quit 2>/dev/null)" ]]; }; then
+  say "Interface code changed; rebuilding it (about a minute)"
+  (
+    export PATH="$RT/node/bin:$PATH"
+    cd "$WEB"
+    if [[ ! -d node_modules || package-lock.json -nt node_modules/.package-lock.json ]]; then
+      npm install --no-audit --no-fund --loglevel=error
+    fi
+    npm run build
+  ) > "$LOGS/frontend-build.log" 2>&1 || die "Rebuilding the interface failed; see portable/logs/frontend-build.log"
+  rm -rf "$ROOT/backend/static" && cp -R "$WEB/dist" "$ROOT/backend/static"
+  info "interface rebuilt"
+fi
+
 # Values from .env (KEY=VALUE lines), without overriding the environment.
 if [[ -f "$ROOT/.env" ]]; then
   while IFS='=' read -r key value; do

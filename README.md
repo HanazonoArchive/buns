@@ -57,6 +57,7 @@ Juice Shop is then at `http://localhost:3000` (the URL in the proposal) and buns
 - `.env` in the project folder is read the same way as with Docker, so put `DEEPSEEK_API_KEY` there.
 - `setup ... -NoZap` (Windows) or `--no-zap` (Linux/macOS) skips ZAP and Java, saving about 600 MB; scans then run the cURL probes only.
 - **Offline machines:** run setup once on a connected computer with the same operating system, then copy the whole project folder. Everything it needs is inside.
+- After `git pull`, just run start again: it notices that the interface code changed and rebuilds it (about a minute). Python package changes still need setup to be run again.
 - Versions are pinned in `portable/versions.env`. Downloads are cached in `portable/cache`, so re-running setup is quick.
 - Intel Macs: Juice Shop publishes no prebuilt package for them, so setup skips it; run Juice Shop another way on port 3000.
 - If Windows shows a firewall prompt for Node.js, you can cancel it; everything is used from this computer only.

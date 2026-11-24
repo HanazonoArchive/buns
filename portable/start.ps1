@@ -32,6 +32,43 @@ if (-not (Test-Path $Py) -or -not (Test-Path (Join-Path $Root 'backend\static'))
 }
 New-Item -ItemType Directory -Force -Path $Data, $Logs, $Run | Out-Null
 
+# Rebuild the interface if its code changed since the last build (e.g. after git pull).
+$Web      = Join-Path $Root 'frontend'
+$Static   = Join-Path $Root 'backend\static'
+$Index    = Join-Path $Static 'index.html'
+$NodeDir  = Join-Path $RT 'node'
+$Npm      = Join-Path $NodeDir 'npm.cmd'
+if (Test-Path $Npm) {
+    $sources = @(Get-ChildItem -Recurse -File (Join-Path $Web 'src') -ErrorAction SilentlyContinue)
+    $sources += @(Get-Item (Join-Path $Web 'index.html'), (Join-Path $Web 'package.json'), (Join-Path $Web 'package-lock.json') -ErrorAction SilentlyContinue)
+    $newest = ($sources | Measure-Object -Property LastWriteTime -Maximum).Maximum
+    $built  = if (Test-Path $Index) { (Get-Item $Index).LastWriteTime } else { [datetime]::MinValue }
+    if ($newest -gt $built) {
+        Say 'Interface code changed; rebuilding it (about a minute)'
+        $buildLog = Join-Path $Logs 'frontend-build.log'
+        $env:Path = "$NodeDir;$env:Path"
+        $marker = Join-Path $Web 'node_modules\.package-lock.json'
+        $lock = Join-Path $Web 'package-lock.json'
+        $needInstall = -not (Test-Path $marker) -or ((Get-Item $lock).LastWriteTime -gt (Get-Item $marker).LastWriteTime)
+        $steps = @()
+        if ($needInstall) { $steps += "`"$Npm`" install --no-audit --no-fund --loglevel=error" }
+        $steps += "`"$Npm`" run build"
+        foreach ($step in $steps) {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = 'cmd.exe'
+            $psi.Arguments = '/d /s /c "' + $step + ' >> "' + $buildLog + '" 2>&1"'
+            $psi.WorkingDirectory = $Web
+            $psi.UseShellExecute = $false
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $proc.WaitForExit()
+            if ($proc.ExitCode -ne 0) { Fail 'Rebuilding the interface failed; see portable\logs\frontend-build.log' }
+        }
+        if (Test-Path $Static) { Remove-Item -Recurse -Force $Static }
+        Copy-Item -Recurse (Join-Path $Web 'dist') $Static
+        Info 'interface rebuilt'
+    }
+}
+
 # Values from .env (KEY=VALUE lines), without overriding the environment.
 $envFile = Join-Path $Root '.env'
 if (Test-Path $envFile) {
