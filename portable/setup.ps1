@@ -124,7 +124,7 @@ $env:PIP_REQUIRE_VIRTUALENV = '0'
 Info 'installing back-end packages (1-5 minutes, details in portable\logs\pip.log)'
 $pipLog = Join-Path $Logs 'pip.log'
 $req = Join-Path $Root 'backend\requirements.txt'
-$code = Invoke-Cmd "set PIP_REQUIRE_VIRTUALENV=0 && `"$Py`" -m pip install --disable-pip-version-check --no-warn-script-location -r `"$req`" > `"$pipLog`" 2>&1"
+$code = Invoke-Cmd "`"$Py`" -m pip install --disable-pip-version-check --no-warn-script-location -r `"$req`" > `"$pipLog`" 2>&1"
 if ($code -ne 0) { Fail 'installing the back-end packages failed; see portable\logs\pip.log' }
 Info 'back-end packages installed'
 
