@@ -7,3 +7,8 @@ backend/data
 backend/tests
 .git
 .env
+**/portable/runtime
+**/portable/cache
+**/portable/data
+**/portable/logs
+**/portable/run

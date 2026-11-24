@@ -18,3 +18,10 @@ backend/static/
 
 # Secrets
 .env
+
+# Portable runtime (created by portable/setup.*)
+portable/runtime/
+portable/cache/
+portable/data/
+portable/logs/
+portable/run/

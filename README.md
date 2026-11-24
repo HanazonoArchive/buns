@@ -30,6 +30,37 @@ The Juice Shop target is registered automatically, with the scope from the propo
 
 To stop: `docker compose down`. Add `-v` to also delete the database and generated reports.
 
+## Run it without Docker
+
+The `portable/` folder sets up the whole lab inside the project folder: Python, Node.js, a Java runtime, OWASP ZAP and OWASP Juice Shop are downloaded into `portable/runtime`. Nothing is installed system-wide and no administrator rights are needed. It needs about 1.5 GB of disk and an internet connection the first time.
+
+**Windows 10 or 11.** Double-click, or run from a terminal in the project folder:
+
+```bat
+setup-portable.cmd
+start-portable.cmd
+stop-portable.cmd
+```
+
+Setup runs once and takes 10 to 20 minutes, mostly downloading. Start launches Juice Shop, ZAP and buns and opens the browser. Stop shuts all three down.
+
+**Linux or macOS:**
+
+```bash
+./portable/setup.sh
+./portable/start.sh
+./portable/stop.sh
+```
+
+Juice Shop is then at `http://localhost:3000` (the URL in the proposal) and buns at `http://localhost:8000`. The services keep running after you close the window, until you run stop. Logs are in `portable/logs`, and the database and reports in `portable/data`.
+
+- `.env` in the project folder is read the same way as with Docker, so put `DEEPSEEK_API_KEY` there.
+- `setup ... -NoZap` (Windows) or `--no-zap` (Linux/macOS) skips ZAP and Java, saving about 600 MB; scans then run the cURL probes only.
+- **Offline machines:** run setup once on a connected computer with the same operating system, then copy the whole project folder. Everything it needs is inside.
+- Versions are pinned in `portable/versions.env`. Downloads are cached in `portable/cache`, so re-running setup is quick.
+- Intel Macs: Juice Shop publishes no prebuilt package for them, so setup skips it; run Juice Shop another way on port 3000.
+- If Windows shows a firewall prompt for Node.js, you can cancel it; everything is used from this computer only.
+
 ### Without a DeepSeek key
 
 If `DEEPSEEK_API_KEY` is empty, buns uses a built-in rules engine that maps each finding's CWE to a written explanation, CVSS vector and Express fix. The interface and the report label this as "Built-in rules" / `offline-rules`, never as model output. It lets the platform be demonstrated offline; the proposal's AI functions need the key.
@@ -76,6 +107,8 @@ Each probe is a single request or a short fixed burst, checked against the scope
 | | Customer session reading another customer's basket (IDOR) | ATHZ-04 |
 
 The password-policy probe creates one account with a random `@example.test` address in Juice Shop. Restarting the Juice Shop container resets its database.
+
+Juice Shop is an Angular single-page app, so ZAP's spider sees the HTML shell but not the JSON API. Before the active scan, buns sends a few read-only API requests (product search, a failed login, a product lookup) through ZAP so those endpoints and their parameters are attacked too (`ZAP_SEEDS` in `scanner.py`). ZAP alerts are grouped: a passive issue seen on many URLs, such as a missing header, becomes one finding listing every affected URL; an active issue becomes one finding per endpoint and parameter. When ZAP and a cURL probe report the same flaw on the same endpoint, the probe's finding is kept because its evidence shows the exploit working.
 
 ZAP's active scan runs with a policy containing only the scan rules for the selected categories (`ZAP_ACTIVE_SCANNERS` in `taxonomy.py`). ZAP alerts on URLs outside the scope are discarded.
 
@@ -153,6 +186,7 @@ backend/
 frontend/
   src/pages/         Overview, Findings, Review, Targets, TargetDetail, ScanView, Reports
 docker-compose.yml   juice-shop, zap, buns
+portable/            setup, start and stop scripts for running without Docker
 ```
 
 ## Known limitations
