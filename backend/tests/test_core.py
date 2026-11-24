@@ -282,3 +282,32 @@ def test_deepseek_client_auth_error_is_not_retried():
     with pytest.raises(AIError, match="401"):
         client.complete_json("s", "u")
     assert len(calls) == 1
+
+
+def test_deepseek_cut_off_reply_is_retried_with_a_bigger_budget(monkeypatch):
+    """A reasoning model can spend the whole budget thinking and return no answer."""
+    monkeypatch.setattr("app.ai.client.time.sleep", lambda s: None)
+    budgets = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        budgets.append(body["max_tokens"])
+        if len(budgets) == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": ""}, "finish_reason": "length"}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"root_cause": "r", "steps": ["a"]}'},
+                                                       "finish_reason": "stop"}]})
+
+    client = DeepSeekClient(api_key="sk-test", transport=httpx.MockTransport(handler))
+    assert client.complete_json("s", "u", max_tokens=1000)["root_cause"] == "r"
+    assert budgets == [1000, 2000]
+
+
+def test_deepseek_empty_reply_error_says_what_happened(monkeypatch):
+    monkeypatch.setattr("app.ai.client.time.sleep", lambda s: None)
+
+    def handler(request):
+        return httpx.Response(200, json={"choices": [{"message": {"content": ""}, "finish_reason": "length"}]})
+
+    client = DeepSeekClient(api_key="sk-test", transport=httpx.MockTransport(handler))
+    with pytest.raises(AIError, match="cut off at the token limit"):
+        client.complete_json("s", "u", max_tokens=1000)

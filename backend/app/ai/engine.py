@@ -151,8 +151,9 @@ def _call(kind: str, payload: dict) -> dict:
     client = DeepSeekClient()
     try:
         if kind == "analysis":
-            return client.complete_json(prompts.ANALYSIS_SYSTEM, prompts.analysis_user(payload))
-        return client.complete_json(prompts.REMEDIATION_SYSTEM, prompts.remediation_user(payload))
+            return client.complete_json(prompts.ANALYSIS_SYSTEM, prompts.analysis_user(payload), max_tokens=3000)
+        # Steps plus a full code example: the longest reply, so the largest budget.
+        return client.complete_json(prompts.REMEDIATION_SYSTEM, prompts.remediation_user(payload), max_tokens=6000)
     finally:
         client.close()
 
