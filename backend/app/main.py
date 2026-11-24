@@ -13,16 +13,22 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import scanner, scope
+from . import notifier, scanner, scope
 from .ai import engine
 from .config import settings
 from .db import get_db, init_db
-from .models import CATEGORIES, SEVERITIES, Endpoint, Finding, Report, Scan, Target
+from .models import CATEGORIES, SEVERITIES, Channel, Endpoint, Finding, Notification, Report, Scan, Target
 from .schemas import (
+    ChannelIn,
+    ChannelOut,
+    ChannelPatch,
     DashboardOut,
     FindingDetail,
     FindingSummary,
     HealthOut,
+    MarkReadIn,
+    NotificationOut,
+    NotificationSummary,
     ReportIn,
     ReportOut,
     ReviewIn,
@@ -34,6 +40,7 @@ from .schemas import (
     TargetIn,
     TargetOut,
     TargetPatch,
+    TestResult,
 )
 from .seed import seed_default_target
 from .tools import curl
@@ -101,6 +108,13 @@ def _target_out(db: Session, t: Target) -> TargetOut:
     return out
 
 
+def _owner_email(value: str) -> str:
+    value = (value or "").strip()
+    if value and not notifier._EMAIL_RE.match(value):
+        raise HTTPException(422, f"'{value}' is not a valid email address for the owner.")
+    return value
+
+
 @app.get("/api/targets", response_model=list[TargetOut])
 def list_targets(db: Session = Db):
     return [_target_out(db, t) for t in db.scalars(select(Target).order_by(Target.id))]
@@ -120,6 +134,8 @@ def create_target(body: TargetIn, db: Session = Db):
         out_of_scope=scope.normalise_prefixes(body.out_of_scope),
         test_email=body.test_email.strip(),
         test_password=body.test_password,
+        owner_name=body.owner_name.strip(),
+        owner_email=_owner_email(body.owner_email),
     )
     db.add(t)
     db.commit()
@@ -138,6 +154,8 @@ def update_target(target_id: int, body: TargetPatch, db: Session = Db):
     for key in ("in_scope", "out_of_scope"):
         if key in data:
             data[key] = scope.normalise_prefixes(data[key])
+    if "owner_email" in data:
+        data["owner_email"] = _owner_email(data["owner_email"])
     for key, value in data.items():
         setattr(t, key, value)
     db.commit()
@@ -300,15 +318,19 @@ def review_finding(finding_id: int, body: ReviewIn, db: Session = Db):
     db.commit()
     if f.status == "confirmed" and f.remediation_status in ("none", "failed"):
         engine.queue_remediation(f.id)
+    if body.decision == "confirm":
+        notifier.safe_emit(notifier.finding_confirmed, f)
     return _finding_detail(f)
 
 
 @app.post("/api/findings/{finding_id}/analyze", response_model=FindingDetail)
 def reanalyze(finding_id: int, db: Session = Db):
     f = _get(db, Finding, finding_id, "Finding")
-    engine.queue_analysis([f.id])
+    # Save the new state before queueing: a fast worker could otherwise
+    # finish first and have its result overwritten with "pending".
     f.ai_status = "pending"
     db.commit()
+    engine.queue_analysis([f.id])
     return _finding_detail(f)
 
 
@@ -317,9 +339,9 @@ def regenerate_remediation(finding_id: int, db: Session = Db):
     f = _get(db, Finding, finding_id, "Finding")
     if f.status != "confirmed":
         raise HTTPException(409, "Remediation is generated for confirmed findings only.")
-    engine.queue_remediation(f.id)
     f.remediation_status = "running"
     db.commit()
+    engine.queue_remediation(f.id)
     return _finding_detail(f)
 
 
@@ -394,6 +416,7 @@ def create_report(target_id: int, body: ReportIn, db: Session = Db):
     r = Report(target_id=t.id, filename=filename, findings_count=len(confirmed), prepared_by=body.prepared_by.strip())
     db.add(r)
     db.commit()
+    notifier.safe_emit(notifier.report_generated, t, r.id, r.findings_count, r.prepared_by)
     return r
 
 
@@ -412,6 +435,109 @@ def download_report(report_id: int, db: Session = Db):
     if not path.is_file():
         raise HTTPException(410, "The report file is no longer on disk.")
     return FileResponse(path, media_type="application/pdf", filename=r.filename)
+
+
+# -- notifications ---------------------------------------------------------
+
+@app.get("/api/notifications", response_model=list[NotificationOut])
+def list_notifications(unread: bool = False, finding_id: int | None = None, limit: int = Query(50, le=200),
+                       db: Session = Db):
+    q = select(Notification).order_by(Notification.id.desc()).limit(limit)
+    if unread:
+        q = q.where(Notification.read.is_(False))
+    if finding_id is not None:
+        q = q.where(Notification.finding_id == finding_id)
+    return list(db.scalars(q))
+
+
+@app.get("/api/notifications/summary", response_model=NotificationSummary)
+def notification_summary(db: Session = Db):
+    return NotificationSummary(
+        unread=db.scalar(select(func.count(Notification.id)).where(Notification.read.is_(False))) or 0,
+        latest_id=db.scalar(select(func.max(Notification.id))) or 0,
+        email_configured=bool(settings.smtp_host),
+    )
+
+
+@app.post("/api/notifications/read", status_code=204)
+def mark_read(body: MarkReadIn, db: Session = Db):
+    q = select(Notification).where(Notification.read.is_(False))
+    if not body.all:
+        if not body.ids:
+            return
+        q = q.where(Notification.id.in_(body.ids))
+    for n in db.scalars(q):
+        n.read = True
+    db.commit()
+
+
+def _channel_out(c: Channel) -> ChannelOut:
+    out = ChannelOut.model_validate(c)
+    out.config = notifier.public_config(c.kind, c.config)
+    return out
+
+
+@app.get("/api/channels", response_model=list[ChannelOut])
+def list_channels(db: Session = Db):
+    return [_channel_out(c) for c in db.scalars(select(Channel).order_by(Channel.id))]
+
+
+@app.post("/api/channels", response_model=ChannelOut, status_code=201)
+def create_channel(body: ChannelIn, db: Session = Db):
+    try:
+        cfg = notifier.validate_config(body.kind, body.config)
+    except notifier.ChannelError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if body.kind == "email" and not cfg["to"] and not body.notify_owner:
+        raise HTTPException(422, "Add at least one address, or turn on emailing the target's owner.")
+    if body.target_id is not None:
+        _get(db, Target, body.target_id, "Target")
+    c = Channel(name=body.name.strip(), kind=body.kind, config=cfg, events=list(dict.fromkeys(body.events)),
+                min_severity=body.min_severity, target_id=body.target_id, notify_owner=body.notify_owner,
+                enabled=body.enabled)
+    db.add(c)
+    db.commit()
+    return _channel_out(c)
+
+
+@app.patch("/api/channels/{channel_id}", response_model=ChannelOut)
+def update_channel(channel_id: int, body: ChannelPatch, db: Session = Db):
+    c = _get(db, Channel, channel_id, "Channel")
+    data = body.model_dump(exclude_unset=True)
+    if "config" in data:
+        try:
+            data["config"] = notifier.merge_config(c.kind, c.config, data["config"] or {})
+        except notifier.ChannelError as exc:
+            raise HTTPException(422, str(exc)) from exc
+    if "events" in data:
+        data["events"] = list(dict.fromkeys(data["events"] or []))
+    for key, value in data.items():
+        setattr(c, key, value)
+    db.commit()
+    return _channel_out(c)
+
+
+@app.delete("/api/channels/{channel_id}", status_code=204)
+def delete_channel(channel_id: int, db: Session = Db):
+    db.delete(_get(db, Channel, channel_id, "Channel"))
+    db.commit()
+
+
+@app.post("/api/channels/{channel_id}/test", response_model=TestResult)
+def test_channel(channel_id: int, db: Session = Db):
+    c = _get(db, Channel, channel_id, "Channel")
+    msg = notifier.test_message(c)
+    if c.kind == "email" and c.notify_owner:
+        msg.owner_email = next((t.owner_email for t in db.scalars(select(Target)) if t.owner_email), "")
+    try:
+        notifier.deliver(c, msg)
+    except notifier.ChannelError as exc:
+        c.last_status, c.last_error = "failed", str(exc)
+        db.commit()
+        return TestResult(ok=False, error=str(exc))
+    c.last_status, c.last_error, c.last_sent_at = "sent", "", _now()
+    db.commit()
+    return TestResult(ok=True)
 
 
 # -- frontend --------------------------------------------------------------

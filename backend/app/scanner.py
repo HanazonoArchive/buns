@@ -112,11 +112,15 @@ def _run(scan_id: int) -> None:
             scan.progress = 100
             scan.finished_at = _now()
         prog.log(f"Scan complete: {len(drafts)} findings, {len(endpoints)} endpoints recorded.")
+        from . import notifier
+
         if finding_ids:
             from .ai import engine
 
             engine.queue_analysis(finding_ids)
             prog.log(f"Queued {len(finding_ids)} findings for analysis ({engine.model_name()}).")
+        else:
+            notifier.safe_emit(notifier.on_scan_without_findings, scan_id)
     except Exception as exc:  # pragma: no cover - top-level guard
         prog.log(f"Scan failed: {exc}")
         with session_scope() as db:
@@ -126,6 +130,9 @@ def _run(scan_id: int) -> None:
                 scan.phase = "failed"
                 scan.error = f"{exc}\n{traceback.format_exc()}"
                 scan.finished_at = _now()
+        from . import notifier
+
+        notifier.safe_emit(notifier.on_scan_failed, scan_id)
     finally:
         _scans.pop(scan_id, None)
 

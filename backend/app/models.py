@@ -31,6 +31,9 @@ class Target(Base):
     # Optional synthetic test account used for access-control checks.
     test_email: Mapped[str] = mapped_column(String(200), default="")
     test_password: Mapped[str] = mapped_column(String(200), default="")
+    # Who is responsible for the system: told when something breaks.
+    owner_name: Mapped[str] = mapped_column(String(120), default="")
+    owner_email: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     scans: Mapped[list[Scan]] = relationship(
@@ -51,6 +54,8 @@ class Scan(Base):
     ajax_spider: Mapped[bool] = mapped_column(default=False)
     log: Mapped[str] = mapped_column(Text, default="")
     error: Mapped[str] = mapped_column(Text, default="")
+    # Set once the "analysis finished" notification has been sent.
+    analysis_notified: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -153,3 +158,69 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     target: Mapped[Target] = relationship()
+
+
+NOTIFY_EVENTS = (
+    "finding.detected",   # analysis rated a new finding critical or high
+    "scan.analysed",      # every finding of a scan has been analysed
+    "scan.failed",
+    "finding.confirmed",  # an assessor confirmed a finding
+    "report.generated",
+)
+CHANNEL_KINDS = ("email", "discord", "slack", "telegram", "webhook")
+
+
+class Channel(Base):
+    """Somewhere notifications are delivered, besides the in-app bell."""
+
+    __tablename__ = "channels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20))
+    config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    events: Mapped[list[str]] = mapped_column(JSON, default=list)
+    min_severity: Mapped[str] = mapped_column(String(10), default="high")
+    # None = every target.
+    target_id: Mapped[int | None] = mapped_column(ForeignKey("targets.id", ondelete="CASCADE"), nullable=True)
+    notify_owner: Mapped[bool] = mapped_column(default=False)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    last_status: Mapped[str] = mapped_column(String(20), default="")
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event: Mapped[str] = mapped_column(String(40))
+    severity: Mapped[str] = mapped_column(String(10), default="")
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text, default="")
+    link: Mapped[str] = mapped_column(String(300), default="")
+    target_id: Mapped[int | None] = mapped_column(ForeignKey("targets.id", ondelete="CASCADE"), nullable=True)
+    scan_id: Mapped[int | None] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), nullable=True)
+    finding_id: Mapped[int | None] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"), nullable=True)
+    read: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    deliveries: Mapped[list[Delivery]] = relationship(
+        back_populates="notification", cascade="all, delete-orphan", order_by="Delivery.id"
+    )
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"))
+    channel_id: Mapped[int | None] = mapped_column(ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
+    channel_name: Mapped[str] = mapped_column(String(120), default="")
+    kind: Mapped[str] = mapped_column(String(20), default="")
+    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued|sent|failed
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    notification: Mapped[Notification] = relationship(back_populates="deliveries")

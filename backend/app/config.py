@@ -36,6 +36,16 @@ class Settings:
     deepseek_model: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     ai_concurrency: int = int(os.getenv("BUNS_AI_CONCURRENCY", "3"))
 
+    # Notifications. Links in messages point at public_url.
+    public_url: str = os.getenv("BUNS_PUBLIC_URL", "http://localhost:8000").rstrip("/")
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user: str = os.getenv("SMTP_USER", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from: str = os.getenv("SMTP_FROM", "")
+    # starttls (port 587), ssl (port 465) or none
+    smtp_security: str = os.getenv("SMTP_SECURITY", "starttls").lower()
+
     cors_origins: list[str] = field(
         default_factory=lambda: _csv(
             os.getenv("BUNS_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")

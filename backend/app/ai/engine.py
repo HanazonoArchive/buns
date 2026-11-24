@@ -158,6 +158,15 @@ def _call(kind: str, payload: dict) -> dict:
 
 
 def analyse_finding(finding_id: int) -> None:
+    try:
+        _analyse_finding(finding_id)
+    finally:
+        from .. import notifier
+
+        notifier.safe_emit(notifier.on_analysis_done, finding_id)
+
+
+def _analyse_finding(finding_id: int) -> None:
     with session_scope() as db:
         f = db.get(Finding, finding_id)
         if f is None:

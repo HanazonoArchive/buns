@@ -34,4 +34,6 @@ def seed_default_target() -> None:
             out_of_scope=["/socket.io/", "/rest/chatbot/"],
             test_email=os.getenv("BUNS_SEED_TEST_EMAIL", "jim@juice-sh.op"),
             test_password=os.getenv("BUNS_SEED_TEST_PASSWORD", "ncc-1701"),
+            owner_name=os.getenv("BUNS_SEED_OWNER_NAME", ""),
+            owner_email=os.getenv("BUNS_SEED_OWNER_EMAIL", ""),
         ))

@@ -25,6 +25,8 @@ class TargetIn(BaseModel):
     out_of_scope: list[str] = Field(default_factory=list)
     test_email: str = ""
     test_password: str = ""
+    owner_name: str = Field(default="", max_length=120)
+    owner_email: str = Field(default="", max_length=200)
 
 
 class TargetPatch(BaseModel):
@@ -34,6 +36,8 @@ class TargetPatch(BaseModel):
     out_of_scope: list[str] | None = None
     test_email: str | None = None
     test_password: str | None = None
+    owner_name: str | None = None
+    owner_email: str | None = None
 
 
 class TargetOut(_Out):
@@ -45,6 +49,8 @@ class TargetOut(_Out):
     out_of_scope: list[str]
     test_email: str
     has_test_password: bool = False
+    owner_name: str
+    owner_email: str
     created_at: datetime
     scan_count: int = 0
     finding_count: int = 0
@@ -204,3 +210,84 @@ class HealthOut(BaseModel):
     ai_mode: str
     ai_model: str
     allowed_hosts: list[str]
+
+
+# -- notifications ---------------------------------------------------------
+
+Event = Literal["finding.detected", "scan.analysed", "scan.failed", "finding.confirmed", "report.generated"]
+ChannelKind = Literal["email", "discord", "slack", "telegram", "webhook"]
+
+
+class ChannelIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    kind: ChannelKind
+    config: dict[str, Any] = Field(default_factory=dict)
+    events: list[Event] = Field(default_factory=lambda: ["finding.detected", "scan.failed", "finding.confirmed"])
+    min_severity: Severity = "high"
+    target_id: int | None = None
+    notify_owner: bool = False
+    enabled: bool = True
+
+
+class ChannelPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    config: dict[str, Any] | None = None
+    events: list[Event] | None = None
+    min_severity: Severity | None = None
+    target_id: int | None = None
+    notify_owner: bool | None = None
+    enabled: bool | None = None
+
+
+class ChannelOut(_Out):
+    id: int
+    name: str
+    kind: str
+    config: dict[str, Any]
+    events: list[str]
+    min_severity: str
+    target_id: int | None
+    notify_owner: bool
+    enabled: bool
+    last_status: str
+    last_error: str
+    last_sent_at: datetime | None
+    created_at: datetime
+
+
+class DeliveryOut(_Out):
+    channel_name: str
+    kind: str
+    status: str
+    error: str
+
+
+class NotificationOut(_Out):
+    id: int
+    event: str
+    severity: str
+    title: str
+    body: str
+    link: str
+    target_id: int | None
+    scan_id: int | None
+    finding_id: int | None
+    read: bool
+    created_at: datetime
+    deliveries: list[DeliveryOut] = Field(default_factory=list)
+
+
+class NotificationSummary(BaseModel):
+    unread: int
+    latest_id: int
+    email_configured: bool
+
+
+class MarkReadIn(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+    all: bool = False
+
+
+class TestResult(BaseModel):
+    ok: bool
+    error: str = ""

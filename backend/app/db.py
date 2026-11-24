@@ -46,6 +46,44 @@ def init_db() -> None:
 
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    """Add columns introduced after a database was created (SQLite only).
+
+    create_all() creates new tables but never alters existing ones, so a
+    database from an earlier version would miss new columns. Only simple
+    additive changes are handled; nothing is dropped or renamed.
+    """
+    if not settings.database_url.startswith("sqlite"):
+        return
+    from sqlalchemy import Boolean, Integer, String, Text, inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    # Pooled connections can hold a stale copy of the schema; start fresh.
+    engine.dispose()
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
+                if isinstance(col.type, Boolean):
+                    ddl, lit = "BOOLEAN", "1" if default else "0"
+                elif isinstance(col.type, Integer):
+                    ddl, lit = "INTEGER", str(default) if default is not None else "NULL"
+                elif isinstance(col.type, (String, Text)):
+                    ddl, lit = "TEXT", "'" + str(default or "").replace("'", "''") + "'"
+                else:
+                    ddl, lit = col.type.compile(engine.dialect), "NULL"
+                try:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl} DEFAULT {lit}'))
+                except OperationalError as exc:
+                    if "duplicate column" not in str(exc):
+                        raise
 
 
 def get_db() -> Iterator[Session]:
