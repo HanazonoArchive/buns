@@ -38,8 +38,13 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 def init_db() -> None:
     from . import models  # noqa: F401  (register tables)
 
-    if settings.database_url.startswith("sqlite:///./"):
-        settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    if settings.database_url.startswith("sqlite:///"):
+        db_path = settings.database_url.removeprefix("sqlite:///")
+        if db_path and db_path != ":memory:":
+            from pathlib import Path
+
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
 
 

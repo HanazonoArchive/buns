@@ -132,7 +132,10 @@ def request(
         raise CurlError(f"curl binary '{settings.curl_bin}' not found") from exc
     except subprocess.TimeoutExpired as exc:
         raise CurlError(f"curl timed out on {url}") from exc
-    if proc.returncode != 0:
+    # 18 = "partial file": the server sent less than its Content-Length
+    # promised (Juice Shop's /ftp listing does this). The bytes received are
+    # still valid evidence, so keep them.
+    if proc.returncode != 0 and not (proc.returncode == 18 and proc.stdout):
         raise CurlError(proc.stderr.decode(errors="replace").strip() or f"curl exited {proc.returncode}")
 
     raw = proc.stdout.decode("utf-8", errors="replace")

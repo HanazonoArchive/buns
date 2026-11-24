@@ -49,7 +49,7 @@ class _Progress:
             if phase is not None:
                 scan.phase = phase
             if progress is not None:
-                scan.progress = max(scan.progress, min(progress, 100))
+                scan.progress = max(scan.progress, min(int(progress), 100))
 
 
 def recover_interrupted() -> None:
@@ -160,6 +160,10 @@ def _recon_and_zap(ctx, prog, endpoints) -> list:
             if scope.is_allowed(url, ctx["base_url"], ctx["in_scope"], ctx["out_of_scope"]):
                 endpoints.append(("GET", url, None))
 
+        seeded = _seed_zap(client, ctx)
+        if seeded:
+            prog.log(f"Sent {seeded} API requests through ZAP so the active scan covers the JSON endpoints")
+
         if ctx["ajax_spider"]:
             prog.set(phase="ajax-spider", progress=32)
             n = client.ajax_spider(ctx["base_url"], context)
@@ -193,9 +197,63 @@ def _recon_and_zap(ctx, prog, endpoints) -> list:
             if scope.is_allowed(a.get("url", ""), ctx["base_url"], ctx["in_scope"], ctx["out_of_scope"])
         ]
         prog.log(f"ZAP reported {len(alerts)} alerts, {len(in_scope_alerts)} within scope")
-        return normalize_zap_alerts(in_scope_alerts)
+        drafts = normalize_zap_alerts(in_scope_alerts)
+        _attach_zap_messages(client, drafts, prog)
+        return drafts
     finally:
         client.close()
+
+
+def _attach_zap_messages(client, drafts, prog) -> None:
+    """ZAP's alert list carries no HTTP exchange; fetch it from the history."""
+    missing = 0
+    for d in drafts:
+        if d.request_raw or not d.message_id:
+            continue
+        try:
+            msg = client.message(d.message_id)
+        except ZapError:
+            missing += 1
+            continue
+        d.request_raw = (msg.get("requestHeader") or "") + (msg.get("requestBody") or "")
+        d.response_raw = (msg.get("responseHeader") or "") + (msg.get("responseBody") or "")[:200_000]
+    if missing:
+        prog.log(f"Could not load the HTTP exchange for {missing} ZAP finding(s)")
+
+
+# Juice Shop is an Angular single-page app: the classic spider sees the HTML
+# shell and static files but not the JSON API the app calls. These requests
+# put the API routes (with their parameters) into ZAP's site tree so the
+# active scan has something to attack. All are read-only or a failed login.
+ZAP_SEEDS: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/rest/products/search?q=apple", ""),
+    ("POST", "/rest/user/login", '{"email":"seed@example.test","password":"not-a-real-password"}'),
+    ("GET", "/api/Products/1", ""),
+    ("GET", "/rest/user/whoami", ""),
+    ("GET", "/rest/track-order/5267-f9cd5882f54c75a3", ""),
+)
+
+
+def _seed_zap(client, ctx) -> int:
+    from urllib.parse import urlsplit
+
+    from . import scope
+
+    host = urlsplit(ctx["base_url"]).netloc
+    sent = 0
+    for method, path, body in ZAP_SEEDS:
+        url = ctx["base_url"].rstrip("/") + path
+        if not scope.is_allowed(url, ctx["base_url"], ctx["in_scope"], ctx["out_of_scope"]):
+            continue
+        headers = [f"{method} {url} HTTP/1.1", f"Host: {host}", "Accept: application/json"]
+        if body:
+            headers += ["Content-Type: application/json", f"Content-Length: {len(body.encode())}"]
+        try:
+            client.send_raw("\r\n".join(headers) + "\r\n\r\n" + body)
+            sent += 1
+        except ZapError:
+            continue
+    return sent
 
 
 def _curl_probes(ctx, prog, endpoints) -> list:
@@ -252,6 +310,7 @@ def _store(scan_id: int, drafts, endpoints, prog) -> list[int]:
                 tool_severity=d.severity,
                 tool_confidence=d.confidence,
                 occurrences=d.occurrences,
+                affected_urls=d.affected_urls or [d.url],
                 ai_status="pending",
             ))
         db.add_all(rows)

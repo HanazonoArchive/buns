@@ -54,7 +54,8 @@ class ProbeContext:
 
 def _draft(ex: curl.HttpExchange, *, rule: str, title: str, description: str, cwe: int,
            severity: str, category: str | None = None, evidence: str = "", param: str = "",
-           attack: str = "", confidence: str = "Medium", yields_to_zap: bool = False) -> FindingDraft:
+           attack: str = "", confidence: str = "Medium", yields_to_zap: bool = False,
+           zap_cwes: tuple[int, ...] = ()) -> FindingDraft:
     cat, owasp, wstg = classify(cwe, fallback=category or "info_disclosure")
     if category:
         cat = category
@@ -77,6 +78,7 @@ def _draft(ex: curl.HttpExchange, *, rule: str, title: str, description: str, cw
         request_raw=ex.request_raw,
         response_raw=ex.response_raw,
         yields_to_zap=yields_to_zap,
+        zap_cwes=zap_cwes,
     )
 
 
@@ -100,7 +102,7 @@ def probe_headers(ctx: ProbeContext) -> list[FindingDraft]:
     if acao == "*":
         out.append(_draft(
             ex, rule="cors-wildcard", cwe=942, severity="medium", category="access_control",
-            yields_to_zap=True,
+            yields_to_zap=True, zap_cwes=(264,),
             title="CORS allows any origin",
             description="Access-Control-Allow-Origin is '*', so any website can read responses "
                         "from this origin with JavaScript.",

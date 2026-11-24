@@ -67,6 +67,7 @@ def analysis_payload(f: Finding) -> tuple[dict[str, Any], dict[str, int]]:
         "evidence": s.clean(f.evidence),
         "tool_severity": f.tool_severity,
         "tool_confidence": f.tool_confidence,
+        "seen_on_urls": f.occurrences,
         "request": s.clean(f.request_raw),
         "response": s.clean(_evidence_window(f.response_raw, f.evidence, 1800)),
         "stack": "Node.js / Express (OWASP Juice Shop)",

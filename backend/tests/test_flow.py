@@ -39,6 +39,8 @@ def test_probes_against_fake_juice_shop(juice):
     } <= rules, rules
     idor = next(d for d in drafts if d.rule_id == "curl:basket-idor")
     assert "GET /rest/basket/3 HTTP/1.1" in idor.request_raw and '"id": 3' in idor.response_raw
+    listing = next(d for d in drafts if d.rule_id == "curl:dir-listing")
+    assert "package.json.bak" in listing.description  # survived the short-body case
     assert len(ctx.endpoints) >= 15
 
 

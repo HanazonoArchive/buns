@@ -103,6 +103,7 @@ class Finding(Base):
     tool_severity: Mapped[str] = mapped_column(String(10), default="info")
     tool_confidence: Mapped[str] = mapped_column(String(20), default="")
     occurrences: Mapped[int] = mapped_column(Integer, default=1)
+    affected_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # AI function 1: interpretation and risk scoring
     ai_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|running|done|failed

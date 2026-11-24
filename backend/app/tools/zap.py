@@ -90,6 +90,9 @@ class ZapClient:
                 raise ZapError(f"{label} did not finish within {timeout_s}s")
             time.sleep(2)
 
+    def send_raw(self, request: str) -> None:
+        self.action("core", "sendRequest", request=request, followRedirects="false")
+
     def spider(self, url: str, context: str, on_progress=None, max_children: int = 0) -> list[str]:
         scan_id = self.action(
             "spider", "scan", url=url, contextName=context, recurse="true", maxChildren=max_children or None

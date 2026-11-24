@@ -40,7 +40,7 @@ _CWE_MAP: dict[int, tuple[str, str, str]] = {
     639: ("access_control", "A01", "WSTG-ATHZ-04"),
     352: ("access_control", "A01", "WSTG-SESS-05"),
     1021: ("access_control", "A05", "WSTG-CLNT-09"),
-    264: ("access_control", "A01", "WSTG-ATHZ-02"),
+    264: ("access_control", "A05", "WSTG-CLNT-07"),  # ZAP uses 264 for CORS misconfiguration
     942: ("access_control", "A05", "WSTG-CLNT-07"),
     287: ("authentication", "A07", "WSTG-ATHN-04"),
     307: ("authentication", "A07", "WSTG-ATHN-03"),

@@ -27,7 +27,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
-    def _send(self, status: int, body: str | dict, ctype: str = "application/json", extra: dict | None = None):
+    def _send(self, status: int, body: str | dict, ctype: str = "application/json", extra: dict | None = None,
+              short_by: int = 0):
         data = json.dumps(body) if isinstance(body, dict) else body
         raw = data.encode()
         self.send_response(status)
@@ -35,7 +36,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
-        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Content-Length", str(len(raw) + short_by))
+        if short_by:
+            self.close_connection = True
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -52,12 +55,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/robots.txt":
             return self._send(200, "User-agent: *\nDisallow: /ftp", "text/plain")
         if path in ("/ftp", "/ftp/"):
+            # Real Juice Shop declares a Content-Length 12 bytes longer than the
+            # body it sends here; curl exits with code 18 on it.
             return self._send(200, (
                 "<html><title>listing directory /ftp</title><body><ul>"
                 '<li><a href="/ftp/acquisitions.md">acquisitions.md</a></li>'
                 '<li><a href="/ftp/package.json.bak">package.json.bak</a></li>'
                 '<li><a href="/ftp/legal.md">legal.md</a></li></ul></body></html>'
-            ), "text/html")
+            ), "text/html", short_by=12)
         if path.startswith("/api/buns-"):
             return self._send(500, (
                 "<html><h1>OWASP Juice Shop (Express ^4.21.0)</h1><h2>500 Error: Unexpected path: "

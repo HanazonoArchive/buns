@@ -114,6 +114,7 @@ export interface FindingDetail extends FindingSummary {
   reviewer: string;
   review_note: string;
   reviewed_at: string | null;
+  affected_urls: string[];
   curl_command: string;
 }
 

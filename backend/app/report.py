@@ -362,7 +362,9 @@ def _finding_block(f: Finding) -> list:
     sev_text = SEV_LABEL[sev] + ("" if suggested == sev else f" (suggested: {SEV_LABEL.get(suggested, suggested)})")
     cvss = f"{f.ai_cvss_score:.1f}  {f.ai_cvss_vector}" if f.ai_cvss_score is not None else "-"
     meta = [
-        ("Endpoint", f"{f.method} {_short_url(f.url)}" + (f"  (parameter: {f.param})" if f.param else "")),
+        ("Endpoint", f"{f.method} {_short_url(f.url)}" + (f"  (parameter: {f.param})" if f.param else "")
+         + (f"\nand {len(f.affected_urls) - 1} more URL(s), e.g. "
+            + ", ".join(_short_url(u) for u in f.affected_urls[1:4]) if len(f.affected_urls or []) > 1 else "")),
         ("Severity", sev_text),
         ("CVSS v3.1", cvss),
         ("Classification", " / ".join(x for x in (f.owasp, f.wstg, f"CWE-{f.cwe_id}" if f.cwe_id else "") if x)),

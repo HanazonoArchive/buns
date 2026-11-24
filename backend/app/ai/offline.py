@@ -333,13 +333,13 @@ _BY_CWE: dict[int, Rule] = {
     89: _SQLI, 943: _SQLI,
     79: _XSS, 80: _XSS,
     639: _IDOR,
-    284: _AUTHZ, 285: _AUTHZ, 264: _AUTHZ,
+    284: _AUTHZ, 285: _AUTHZ,
     307: _RATE,
     521: _WEAKPW,
     548: _LISTING, 538: _LISTING, 530: _LISTING,
     209: _ERRORS,
     693: _HEADERS, 1021: _HEADERS, 16: _HEADERS, 614: _HEADERS, 1004: _HEADERS, 1275: _HEADERS,
-    942: _CORS,
+    942: _CORS, 264: _CORS,
     497: _BANNER,
     200: _DISCLOSURE, 615: _DISCLOSURE, 540: _DISCLOSURE,
 }
@@ -376,12 +376,20 @@ def analyse(payload: dict) -> dict:
     else:
         fp = "Plausible: the tool matched a known pattern; check the evidence before confirming."
         conf = "medium"
+    vector = rule.vector
+    if payload.get("tool_severity") == "info":
+        # The tool itself classed this as informational; do not inflate it.
+        vector = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:N"
+    summary = _fmt(rule.summary, payload)
+    seen = payload.get("seen_on_urls") or 1
+    if seen > 1:
+        summary += f" The same issue was reported on {seen} URLs across the site."
     return {
-        "summary": _fmt(rule.summary, payload),
+        "summary": summary,
         "impact": rule.impact,
         "false_positive_assessment": fp,
         "confidence": conf,
-        "cvss_vector": rule.vector,
+        "cvss_vector": vector,
     }
 
 

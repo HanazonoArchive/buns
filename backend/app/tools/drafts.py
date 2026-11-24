@@ -28,4 +28,8 @@ class FindingDraft:
     # Curl header checks overlap with ZAP passive rules; drop them when ZAP
     # produced a finding with the same CWE.
     yields_to_zap: bool = False
-    extra_urls: list[str] = field(default_factory=list)
+    # Other CWEs ZAP may use for the same issue.
+    zap_cwes: tuple[int, ...] = ()
+    affected_urls: list[str] = field(default_factory=list)
+    # ZAP history id of the representative alert, used to fetch the exchange.
+    message_id: str = ""

@@ -146,6 +146,58 @@ def test_normalize_groups_and_classifies():
     assert d.severity == "high" and d.description == "SQL injection may be possible."
 
 
+def test_zap_exchange_is_fetched_by_message_id():
+    from app.scanner import _attach_zap_messages
+
+    class FakeZap:
+        def message(self, mid):
+            assert mid == "42"
+            return {"requestHeader": "GET / HTTP/1.1\r\n\r\n", "requestBody": "",
+                    "responseHeader": "HTTP/1.1 200 OK\r\n\r\n", "responseBody": "<html>"}
+
+    drafts = normalize_zap_alerts([_alert(messageId="42")])
+    _attach_zap_messages(FakeZap(), drafts, type("P", (), {"log": lambda self, m: None})())
+    assert drafts[0].request_raw.startswith("GET / HTTP/1.1") and drafts[0].response_raw.endswith("<html>")
+
+
+def test_passive_alerts_group_site_wide():
+    alerts = [_alert(pluginId="10038", name="CSP Header Not Set", cweid="693", risk="Medium", attack="", param="",
+                     url=f"{BASE}/page{i}") for i in range(40)]
+    drafts = normalize_zap_alerts(alerts)
+    assert len(drafts) == 1
+    assert drafts[0].occurrences == 40 and len(drafts[0].affected_urls) == 40
+
+
+def test_active_alerts_group_per_endpoint():
+    alerts = [_alert(url=f"{BASE}/rest/products/search?q={i}") for i in range(5)] + [_alert(url=f"{BASE}/rest/user/login", param="email")]
+    assert len(normalize_zap_alerts(alerts)) == 2
+
+
+def test_dedupe_cors_against_zap_cross_domain():
+    from app.tools.drafts import FindingDraft
+
+    zap = normalize_zap_alerts([_alert(pluginId="10098", name="Cross-Domain Misconfiguration", cweid="264", risk="Medium", attack="")])
+    cors = FindingDraft(source="curl", rule_id="curl:cors-wildcard", title="CORS", description="", category="access_control",
+                        owasp="", wstg="", cwe_id=942, method="GET", url=BASE, severity="medium", yields_to_zap=True, zap_cwes=(264,))
+    assert [d.source for d in dedupe(zap + [cors])] == ["zap"]
+
+
+def test_zap_alert_on_same_endpoint_merges_into_curl_probe():
+    from app.tools.drafts import FindingDraft
+
+    zap = normalize_zap_alerts([_alert(url=f"{BASE}/rest/user/login", param="email", method="POST")])
+    probe = FindingDraft(source="curl", rule_id="curl:login-sqli-bypass", title="Login bypass", description="Token issued.",
+                         category="authentication", owasp="", wstg="", cwe_id=89, method="POST",
+                         url=f"{BASE}/rest/user/login", severity="critical", param="email")
+    out = dedupe(zap + [probe])
+    assert [d.source for d in out] == ["curl"] and "ZAP reported the same issue" in out[0].description
+
+
+def test_offline_keeps_informational_alerts_informational():
+    result = validate_analysis(offline.analyse({"tool_severity": "info", "cwe": None, "title": "Modern Web Application"}))
+    assert result["severity"] == "info"
+
+
 def test_dedupe_prefers_zap_for_headers():
     from app.tools.drafts import FindingDraft
 

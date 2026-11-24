@@ -41,7 +41,13 @@ function Evidence({ f }: { f: FindingDetail }) {
             <code className="hl">{f.evidence}</code>
           </p>
         )}
-        {!f.attack && !f.evidence && <p className="dim">The tool recorded no payload or matched string; read the exchange below.</p>}
+        {!f.attack && !f.evidence && <p className="dim plain">The tool recorded no payload or matched string; read the exchange below.</p>}
+        {f.affected_urls.length > 1 && (
+          <details className="affected">
+            <summary>Seen on {f.affected_urls.length} URLs. The exchange below is one example.</summary>
+            <ul>{[...new Set(f.affected_urls.map(pathOf))].map((u) => <li key={u} className="mono">{u}</li>)}</ul>
+          </details>
+        )}
       </div>
       <div className="tabs" role="tablist">
         {tabs.map(([k, label]) => (

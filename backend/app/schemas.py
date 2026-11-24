@@ -154,6 +154,7 @@ class FindingDetail(FindingSummary):
     reviewer: str
     review_note: str
     reviewed_at: datetime | None
+    affected_urls: list[str] = Field(default_factory=list)
     curl_command: str = ""
 
 
