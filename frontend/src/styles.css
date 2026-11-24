@@ -1774,7 +1774,7 @@ legend { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 
 .fix-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok-soft); color: var(--ok-text); font-size: 12.5px; font-weight: 700; margin-top: 1px; }
 .fix-title { display: block; color: var(--ink); font-weight: 640; margin-bottom: 2px; }
 .fix-steps p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
-.codeblock pre.folded { max-height: 330px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
+.codeblock pre.folded { max-height: 330px; overflow: hidden; }
 .codeblock-more { display: block; width: 100%; padding: 8px; border: 0; border-top: 1px solid #1c2536; background: #1a2232; color: #bcc6fb; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .codeblock-more:hover { background: #222c40; color: #fff; }
 .remediation .codeblock pre:not(.folded) { max-height: none; }
