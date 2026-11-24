@@ -53,7 +53,7 @@ function Queue({ d }: { d: Dashboard }) {
     if (d.severity_open.critical) parts.push(`${d.severity_open.critical} critical`);
     if (d.severity_open.high) parts.push(`${d.severity_open.high} high`);
     return (
-      <section className={`queue ${urgent ? "queue-urgent" : ""}`}>
+      <section className={`queue ${urgent ? "queue-urgent" : "queue-pending"}`}>
         <span className="queue-icon">{urgent ? <ShieldAlert size={22} /> : <Layers size={22} />}</span>
         <div className="queue-text">
           <p className="queue-line">
@@ -64,7 +64,7 @@ function Queue({ d }: { d: Dashboard }) {
             {analysing > 0 && ` ${analysing} still being analysed.`}
           </p>
         </div>
-        <Link className="btn btn-primary" to="/findings?status=pending">
+        <Link className={`btn ${urgent ? "btn-danger" : "btn-primary"}`} to="/findings?status=pending">
           Start reviewing <ArrowRight size={16} aria-hidden />
         </Link>
       </section>
@@ -167,7 +167,7 @@ export default function Overview() {
 
       <div className="stats">
         <Stat icon={Radar} label="Scans" value={d.scans} note={d.scans_running ? `${d.scans_running} running` : undefined} tone="stat-scans" />
-        <Stat icon={ShieldAlert} label="Awaiting review" value={d.pending} tone={d.pending ? "stat-urgent" : "stat-pending"} />
+        <Stat icon={ShieldAlert} label="Awaiting review" value={d.pending} tone={d.pending ? "stat-pending stat-active" : "stat-pending"} />
         <Stat icon={ShieldCheck} label="Confirmed" value={d.confirmed} tone="stat-confirmed" />
         <Stat icon={ShieldX} label="False positives" value={d.rejected} tone="stat-rejected" />
       </div>

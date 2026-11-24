@@ -1580,3 +1580,28 @@ legend { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 
 .status-text.confirmed { color: var(--ok-text); }
 .status-text.rejected { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .status-sub { display: block; font-size: 12.5px; margin-top: 2px; }
+
+/* overview colour ------------------------------------------------------------ */
+/* Banner: crimson when critical/high findings wait, indigo for ordinary review,
+   green when everything is reviewed. A tinted wash plus a solid left edge. */
+.queue { border-left-width: 4px; }
+.queue-pending { border-left-color: var(--action); background: linear-gradient(90deg, #f3f4ff 0%, var(--surface) 55%); }
+.queue-pending .queue-icon { background: var(--action-soft); color: var(--action); border: 0; }
+.queue-urgent { border-color: var(--critical-line); border-left-color: var(--critical-solid); background: linear-gradient(90deg, #fff1f4 0%, var(--surface) 55%); }
+.queue-urgent .queue-icon { background: var(--critical-bg); color: var(--critical); border: 0; }
+.queue-urgent .queue-sub { color: #8a2a3f; }
+.queue-done { border-left-color: var(--ok); background: linear-gradient(90deg, #eefaf4 0%, var(--surface) 55%); }
+.queue-done .queue-icon { background: var(--ok-soft); color: var(--ok-text); border: 0; }
+
+/* Tiles: each count has its own hue on the icon chip and a thin top accent. */
+.stat { --tone: var(--muted); --tone-bg: var(--surface-2); overflow: hidden; }
+.stat::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--tone); opacity: 0.85; }
+.stat .stat-icon { background: var(--tone-bg); color: var(--tone); border-color: transparent; }
+.stat:hover .stat-icon { color: var(--tone); border-color: transparent; }
+.stat-scans { --tone: var(--action); --tone-bg: var(--action-soft); }
+.stat-pending { --tone: #d97706; --tone-bg: #fef4e2; }
+.stat-active .stat-value { color: #b45309; }
+.stat-confirmed { --tone: var(--ok); --tone-bg: var(--ok-soft); }
+.stat-rejected { --tone: var(--info-solid); --tone-bg: var(--info-bg); }
+.queue-urgent .btn-danger { background: var(--critical-solid); border-color: var(--critical-solid); }
+.queue-urgent .btn-danger:hover { background: var(--critical); border-color: var(--critical); }
