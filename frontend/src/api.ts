@@ -29,6 +29,8 @@ export interface Target {
   out_of_scope: string[];
   test_email: string;
   has_test_password: boolean;
+  owner_name: string;
+  owner_email: string;
   created_at: string;
   scan_count: number;
   finding_count: number;
@@ -144,6 +146,67 @@ export interface Report {
   created_at: string;
 }
 
+export type NotifyEvent = "finding.detected" | "scan.analysed" | "scan.failed" | "finding.confirmed" | "report.generated";
+export type ChannelKind = "email" | "discord" | "slack" | "telegram" | "webhook";
+
+export const EVENTS: { key: NotifyEvent; label: string; hint: string }[] = [
+  { key: "finding.detected", label: "Serious finding detected", hint: "Analysis rated a new finding at or above the threshold" },
+  { key: "scan.analysed", label: "Scan analysed", hint: "Summary when every finding of a scan has been analysed" },
+  { key: "scan.failed", label: "Scan failed", hint: "A scan stopped before finishing" },
+  { key: "finding.confirmed", label: "Finding confirmed", hint: "An assessor verified a vulnerability" },
+  { key: "report.generated", label: "Report generated", hint: "A PDF report is ready" },
+];
+
+export const CHANNEL_LABEL: Record<ChannelKind, string> = {
+  email: "Email",
+  discord: "Discord",
+  slack: "Slack",
+  telegram: "Telegram",
+  webhook: "Webhook",
+};
+
+export interface Channel {
+  id: number;
+  name: string;
+  kind: ChannelKind;
+  config: Record<string, string | string[]>;
+  events: NotifyEvent[];
+  min_severity: Severity;
+  target_id: number | null;
+  notify_owner: boolean;
+  enabled: boolean;
+  last_status: "" | "sent" | "failed";
+  last_error: string;
+  last_sent_at: string | null;
+  created_at: string;
+}
+
+export type ChannelInput = Pick<Channel, "name" | "kind" | "events" | "min_severity" | "target_id" | "notify_owner" | "enabled"> & {
+  config: Record<string, string | string[]>;
+};
+
+export interface Delivery {
+  channel_name: string;
+  kind: ChannelKind;
+  status: "queued" | "sent" | "failed";
+  error: string;
+}
+
+export interface Notice {
+  id: number;
+  event: NotifyEvent | "test";
+  severity: Severity | "";
+  title: string;
+  body: string;
+  link: string;
+  target_id: number | null;
+  scan_id: number | null;
+  finding_id: number | null;
+  read: boolean;
+  created_at: string;
+  deliveries: Delivery[];
+}
+
 export interface Health {
   status: string;
   zap: string;
@@ -213,7 +276,39 @@ export const api = {
   reports: (target_id?: number) => request<Report[]>(`/reports${qs({ target_id })}`),
   createReport: (targetId: number, prepared_by: string) => post<Report>(`/targets/${targetId}/reports`, { prepared_by }),
   reportUrl: (id: number) => `/api/reports/${id}/download`,
+  notifications: (opts: { unread?: boolean; limit?: number; finding_id?: number } = {}) =>
+    request<Notice[]>(`/notifications${qs({ unread: opts.unread ? "true" : undefined, limit: opts.limit, finding_id: opts.finding_id })}`),
+  notificationSummary: () => request<{ unread: number; latest_id: number; email_configured: boolean }>("/notifications/summary"),
+  markRead: (body: { ids?: number[]; all?: boolean }) =>
+    request<void>("/notifications/read", { method: "POST", body: JSON.stringify(body) }),
+  channels: () => request<Channel[]>("/channels"),
+  createChannel: (body: ChannelInput) => post<Channel>("/channels", body),
+  updateChannel: (id: number, body: Partial<ChannelInput>) =>
+    request<Channel>(`/channels/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteChannel: (id: number) => request<void>(`/channels/${id}`, { method: "DELETE" }),
+  testChannel: (id: number) => post<{ ok: boolean; error: string }>(`/channels/${id}/test`),
 };
+
+/** Notification links are absolute; turn same-origin ones into router paths. */
+export function localPath(link: string): string | null {
+  try {
+    const u = new URL(link, window.location.origin);
+    if (u.pathname.startsWith("/api/")) return null;
+    return u.pathname + u.search;
+  } catch {
+    return null;
+  }
+}
+
+export function ago(iso: string | null) {
+  if (!iso) return "";
+  const t = new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z").getTime();
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
 
 export function fid(id: number) {
   return `BUNS-${String(id).padStart(3, "0")}`;

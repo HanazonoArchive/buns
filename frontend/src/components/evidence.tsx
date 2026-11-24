@@ -1,4 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { Check, Copy } from "lucide-react";
+import type { Severity } from "../api";
+import { Sev } from "./ui";
 
 function prettyBody(body: string): string {
   const t = body.trim();
@@ -85,7 +88,7 @@ const CVSS_NAMES: Record<string, [string, Record<string, string>]> = {
   A: ["Availability", { N: "None", L: "Low", H: "High" }],
 };
 
-export function CvssBreakdown({ vector, score }: { vector: string; score: number | null }) {
+export function CvssBreakdown({ vector, score, severity }: { vector: string; score: number | null; severity?: Severity | "" }) {
   if (!vector) return null;
   const metrics = vector
     .replace(/^CVSS:3\.[01]\//, "")
@@ -95,7 +98,10 @@ export function CvssBreakdown({ vector, score }: { vector: string; score: number
     <div className="cvss">
       <div className="cvss-head">
         <span className="cvss-score">{score?.toFixed(1) ?? "–"}</span>
-        <code className="cvss-vector">{vector}</code>
+        <span className="cvss-meta">
+          {severity && <Sev s={severity} size="sm" />}
+          <code className="cvss-vector">{vector}</code>
+        </span>
       </div>
       <dl className="cvss-grid">
         {metrics.map(([k, v]) => {
@@ -119,7 +125,7 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
       <div className="codeblock-bar">
         <span>{label}</span>
         <button
-          className="link small"
+          className="link small inline"
           onClick={() => {
             navigator.clipboard?.writeText(code).then(() => {
               setCopied(true);
@@ -127,6 +133,7 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
             });
           }}
         >
+          {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
